@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Documents légaux — L'Art des Extensions</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --creme:    #F7F4EF;
+      --beige:    #EDE8DF;
+      --taupe:    #C4B8A8;
+      --brun:     #6B5B4E;
+      --encre:    #2C2420;
+      --accent:   #9C8674;
+    }
+
+    body {
+      background: var(--creme);
+      color: var(--encre);
+      font-family: 'Jost', sans-serif;
+      font-weight: 300;
+      font-size: 15px;
+      line-height: 1.8;
+    }
+
+    /* ── Navigation ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--creme);
+      border-bottom: 1px solid var(--taupe);
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+    }
+
+    nav a {
+      flex: 1;
+      min-width: max-content;
+      text-align: center;
+      padding: 14px 20px;
+      font-family: 'Jost', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--brun);
+      text-decoration: none;
+      border-bottom: 2px solid transparent;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    nav a:hover, nav a.active {
+      color: var(--encre);
+      border-bottom-color: var(--accent);
+    }
+
+    /* ── Sections ── */
+    section {
+      display: none;
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 60px 28px 100px;
+    }
+
+    section.visible { display: block; }
+
+    /* ── Typographie ── */
+    .doc-label {
+      font-family: 'Jost', sans-serif;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 300;
+      font-size: clamp(2rem, 5vw, 3rem);
+      line-height: 1.15;
+      color: var(--encre);
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: var(--brun);
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--beige);
+    }
+
+    h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 400;
+      font-size: 1.35rem;
+      color: var(--brun);
+      margin-top: 44px;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--beige);
+    }
+
+    h3 {
+      font-family: 'Jost', sans-serif;
+      font-weight: 500;
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-top: 28px;
+      margin-bottom: 8px;
+    }
+
+    p { margin-bottom: 14px; }
+
+    ul {
+      margin: 8px 0 14px 20px;
+    }
+
+    ul li { margin-bottom: 6px; }
+
+    a { color: var(--brun); text-decoration: underline; text-underline-offset: 3px; }
+
+    .info-block {
+      background: var(--beige);
+      border-left: 3px solid var(--accent);
+      padding: 16px 20px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+
+    .info-block strong {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: var(--encre);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 20px;
+      font-size: 14px;
+    }
+
+    th {
+      background: var(--beige);
+      font-weight: 500;
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--beige);
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .date-maj {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid var(--beige);
+      font-size: 12px;
+      color: var(--taupe);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="active" onclick="show('cgv', this)">Conditions générales de vente</a>
+  <a href="#" onclick="show('mentions', this)">Mentions légales</a>
+  <a href="#" onclick="show('rgpd', this)">Politique de confidentialité</a>
+</nav>
+
+<!-- ══════════════════════════════════════════
+     CGV
+═══════════════════════════════════════════ -->
+<section id="cgv" class="visible">
+  <div class="doc-label">Document contractuel</div>
+  <h1>Conditions générales de vente</h1>
+  <p class="subtitle">En vigueur au 10 juin 2026 — L'Art des Extensions, Orsay</p>
+
+  <h2>Article 1 — Objet et champ d'application</h2>
+  <p>Les présentes conditions générales de vente (CGV) régissent l'ensemble des prestations de services et ventes de produits proposées par L'Art des Extensions, entreprise individuelle exploitée par Jessie Clément, immatriculée au R.C.S. d'Évry sous le numéro 823 905 633.</p>
+  <p>Toute réservation ou commande implique l'acceptation pleine et entière des présentes CGV.</p>
+
+  <h2>Article 2 — Identification du prestataire</h2>
+  <div class="info-block">
+    <strong>L'Art des Extensions</strong>
+    Jessie Clément — entreprise individuelle<br>
+    15 Rue du Fond du Guichet, 91400 Orsay<br>
+    RCS Évry : 823 905 633<br>
+    Email : <a href="mailto:lartdesextensions@gmail.com">lartdesextensions@gmail.com</a><br>
+    Téléphone : 07 80 96 38 23
+  </div>
+
+  <h2>Article 3 — Prestations proposées</h2>
+  <p>L'Art des Extensions propose les prestations suivantes :</p>
+  <ul>
+    <li>Pose d'extensions capillaires (bandes adhésives, kératine, tissage californien)</li>
+    <li>Services couleur, balayage, lissage et soins capillaires</li>
+    <li>Formations professionnelles aux techniques d'extensions</li>
+    <li>Vente de produits de beauté et d'extensions de cheveux</li>
+  </ul>
+  <p>Les prestations sont réalisées sur rendez-vous uniquement, du lundi au samedi de 9h à 17h, à l'adresse indiquée ci-dessus.</p>
+
+  <h2>Article 4 — Tarifs</h2>
+  <p>Les tarifs sont ceux affichés sur le site au moment de la réservation. Ils sont exprimés en euros TTC. L'Art des Extensions bénéficie de la franchise de TVA en application de l'article 293 B du Code général des impôts.</p>
+  <p>Les tarifs peuvent être modifiés à tout moment ; les prestations sont facturées sur la base des tarifs en vigueur au moment de la confirmation de la réservation.</p>
+
+  <h2>Article 5 — Réservation et acompte</h2>
+  <h3>5.1 Modalités de réservation</h3>
+  <p>La réservation est effectuée via le formulaire en ligne disponible sur le site. Elle devient ferme après paiement de l'acompte et réception de la confirmation par email.</p>
+
+  <h3>5.2 Acompte</h3>
+  <p>Un acompte est exigé au moment de la réservation :</p>
+  <table>
+    <thead>
+      <tr><th>Type de prestation</th><th>Acompte</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Prestations standards</td><td>35 % du montant total</td></tr>
+      <tr><td>Prestations incluant une dépose</td><td>40 % du montant total</td></tr>
+    </tbody>
+  </table>
+  <p>L'acompte est déduit du montant final dû lors de la prestation. Il n'est pas remboursable en cas d'annulation tardive (voir article 6).</p>
+
+  <h2>Article 6 — Annulation et report</h2>
+  <h3>6.1 Annulation par la cliente</h3>
+  <p>Toute annulation ou modification de rendez-vous doit être signalée en contactant directement L'Art des Extensions au minimum <strong>72h avant</strong> la date prévue.</p>
+  <ul>
+    <li><strong>Annulation ou modification à plus de 72h :</strong> l'acompte est remboursé ou reporté sur un nouveau rendez-vous, au choix de la cliente.</li>
+    <li><strong>Annulation ou modification à moins de 72h :</strong> l'acompte est conservé à titre d'indemnité d'immobilisation.</li>
+    <li><strong>Pour les poses d'extensions :</strong> l'acompte n'est pas remboursable pour tout rendez-vous annulé ou modifié à moins de 3 semaines avant la date prévue.</li>
+  </ul>
+
+  <h3>6.2 Annulation par L'Art des Extensions</h3>
+  <p>En cas d'annulation du fait de L'Art des Extensions, la cliente est remboursée intégralement de l'acompte versé ou peut choisir de reporter le rendez-vous à une date ultérieure.</p>
+
+  <h2>Article 7 — Paiement</h2>
+  <p>Le solde est réglé à l'issue de la prestation. Les moyens de paiement acceptés sont :</p>
+  <ul>
+    <li>Carte bancaire (via Stripe)</li>
+    <li>PayPal</li>
+    <li>Espèces</li>
+    <li>Virement bancaire (sur demande)</li>
+  </ul>
+  <p>Aucun escompte n'est appliqué en cas de paiement anticipé.</p>
+
+  <h2>Article 8 — Obligations et responsabilités</h2>
+  <h3>8.1 Obligations de la cliente</h3>
+  <p>La cliente s'engage à informer L'Art des Extensions de toute allergie, pathologie du cuir chevelu ou traitement médical pouvant affecter la prestation, lors de la prise de rendez-vous ou au plus tard lors du bilan capillaire réalisé en début de séance.</p>
+  <p>En cas d'omission d'informations médicales pertinentes, la responsabilité de L'Art des Extensions ne saurait être engagée pour les conséquences pouvant en résulter.</p>
+
+  <h3>8.2 Bilan préalable</h3>
+  <p>Un bilan capillaire est systématiquement réalisé avant toute pose d'extensions. L'Art des Extensions se réserve le droit de refuser ou d'adapter la prestation si l'état du cheveu ne le permet pas, sans obligation de remboursement de l'acompte si ce refus résulte d'informations non communiquées par la cliente.</p>
+
+  <h2>Article 9 — Vente de produits</h2>
+  <p>Pour les produits vendus à distance, la cliente dispose d'un délai de rétractation de 14 jours à compter de la réception du produit, conformément aux articles L. 221-18 et suivants du Code de la consommation. Les produits retournés doivent être dans leur état d'origine, non ouverts et non utilisés.</p>
+  <p>Le droit de rétractation ne s'applique pas aux prestations de services entièrement exécutées avec l'accord préalable de la cliente.</p>
+
+  <h2>Article 10 — Formations professionnelles</h2>
+  <p>Les formations font l'objet de conditions particulières communiquées lors de l'inscription. Un acompte spécifique peut être demandé. En cas d'annulation d'une formation par la stagiaire moins de 3 semaines avant la date prévue, l'acompte est conservé.</p>
+
+  <h2>Article 11 — Litiges</h2>
+  <p>En cas de litige, la cliente est invitée à contacter L'Art des Extensions en premier lieu à l'adresse <a href="mailto:lartdesextensions@gmail.com">lartdesextensions@gmail.com</a> afin de trouver une solution amiable.</p>
+  <p>À défaut d'accord amiable, il est possible de recourir gratuitement à un médiateur de la consommation. Le tribunal compétent sera celui du ressort d'Évry.</p>
+
+  <p class="date-maj">Dernière mise à jour : 10 juin 2026</p>
+</section>
+
+<!-- ══════════════════════════════════════════
+     MENTIONS LÉGALES
+═══════════════════════════════════════════ -->
+<section id="mentions">
+  <div class="doc-label">Obligations légales</div>
+  <h1>Mentions légales</h1>
+  <p class="subtitle">Conformément à la loi n° 2004-575 du 21 juin 2004 pour la confiance dans l'économie numérique</p>
+
+  <h2>Éditeur du site</h2>
+  <div class="info-block">
+    <strong>L'Art des Extensions</strong>
+    Jessie Clément — entreprise individuelle<br>
+    15 Rue du Fond du Guichet, 91400 Orsay<br>
+    RCS Évry : 823 905 633<br>
+    Date d'immatriculation : 27 mars 2025<br>
+    Email : <a href="mailto:lartdesextensions@gmail.com">lartdesextensions@gmail.com</a><br>
+    Téléphone : 07 80 96 38 23<br><br>
+    Activité soumise à la validation CMA (Chambre des Métiers et de l'Artisanat) — mention du 23 janvier 2026.
+  </div>
+
+  <h2>Directrice de la publication</h2>
+  <p>Jessie Clément, en qualité de propriétaire et exploitante de L'Art des Extensions.</p>
+
+  <h2>Hébergement</h2>
+  <div class="info-block">
+    <strong>Netlify, Inc.</strong>
+    512 2nd Street, Suite 200<br>
+    San Francisco, CA 94107 — États-Unis<br>
+    <a href="https://www.netlify.com" target="_blank" rel="noopener">www.netlify.com</a>
+  </div>
+
+  <h2>Propriété intellectuelle</h2>
+  <p>L'ensemble des contenus présents sur ce site (textes, photographies, visuels, logos, charte graphique) est la propriété exclusive de Jessie Clément / L'Art des Extensions, sauf mention contraire. Toute reproduction, représentation ou diffusion, totale ou partielle, sans autorisation écrite préalable est strictement interdite.</p>
+
+  <h2>Responsabilité</h2>
+  <p>L'Art des Extensions s'efforce de maintenir les informations du site à jour et exactes, mais ne saurait être tenu responsable d'erreurs, omissions ou indisponibilités. Les liens hypertextes vers des sites tiers sont proposés à titre indicatif ; L'Art des Extensions n'est pas responsable de leur contenu.</p>
+
+  <h2>Droit applicable</h2>
+  <p>Le présent site est soumis au droit français. Tout litige relatif à son utilisation relèvera de la compétence exclusive des tribunaux du ressort d'Évry.</p>
+
+  <p class="date-maj">Dernière mise à jour : 10 juin 2026</p>
+</section>
+
+<!-- ══════════════════════════════════════════
+     RGPD
+═══════════════════════════════════════════ -->
+<section id="rgpd">
+  <div class="doc-label">Protection des données</div>
+  <h1>Politique de confidentialité</h1>
+  <p class="subtitle">Conformément au Règlement (UE) 2016/679 (RGPD) et à la loi Informatique et Libertés</p>
+
+  <h2>Article 1 — Responsable du traitement</h2>
+  <div class="info-block">
+    <strong>Jessie Clément — L'Art des Extensions</strong>
+    15 Rue du Fond du Guichet, 91400 Orsay<br>
+    Email : <a href="mailto:lartdesextensions@gmail.com">lartdesextensions@gmail.com</a><br>
+    Téléphone : 07 80 96 38 23
+  </div>
+
+  <h2>Article 2 — Données collectées</h2>
+  <p>Dans le cadre de la prise de rendez-vous et de la relation commerciale, les données suivantes peuvent être collectées :</p>
+  <table>
+    <thead>
+      <tr><th>Catégorie</th><th>Données</th><th>Finalité</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Identité</td>
+        <td>Nom, prénom</td>
+        <td>Gestion des réservations</td>
+      </tr>
+      <tr>
+        <td>Contact</td>
+        <td>Email, téléphone</td>
+        <td>Confirmation de RDV, rappels, communication commerciale</td>
+      </tr>
+      <tr>
+        <td>Paiement</td>
+        <td>Données de transaction (traitées par Stripe / PayPal)</td>
+        <td>Encaissement de l'acompte et du solde</td>
+      </tr>
+      <tr>
+        <td>Navigation</td>
+        <td>Adresse IP, cookies techniques</td>
+        <td>Bon fonctionnement du site</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>Les données de paiement sont traitées exclusivement par Stripe et PayPal. L'Art des Extensions ne stocke aucune donnée bancaire.</p>
+
+  <h2>Article 3 — Base légale des traitements</h2>
+  <ul>
+    <li><strong>Exécution du contrat</strong> : réservation, facturation, suivi de la prestation.</li>
+    <li><strong>Intérêt légitime</strong> : communication commerciale à destination des clientes existantes.</li>
+    <li><strong>Consentement</strong> : inscription à la liste de diffusion, si applicable.</li>
+    <li><strong>Obligation légale</strong> : conservation des documents comptables.</li>
+  </ul>
+
+  <h2>Article 4 — Durée de conservation</h2>
+  <table>
+    <thead>
+      <tr><th>Type de données</th><th>Durée</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Données client actif</td><td>Durée de la relation commerciale + 3 ans</td></tr>
+      <tr><td>Documents comptables</td><td>10 ans (obligation légale)</td></tr>
+      <tr><td>Données de navigation</td><td>13 mois maximum</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Article 5 — Partage des données</h2>
+  <p>Les données personnelles ne sont ni vendues ni cédées à des tiers. Elles peuvent être transmises aux prestataires techniques suivants, dans la stricte limite de leur mission :</p>
+  <ul>
+    <li><strong>Stripe, Inc.</strong> — traitement des paiements par carte</li>
+    <li><strong>PayPal (Europe) S.à r.l.</strong> — traitement des paiements PayPal</li>
+    <li><strong>Netlify, Inc.</strong> — hébergement du site</li>
+  </ul>
+  <p>Ces prestataires sont soumis à des obligations contractuelles garantissant la protection des données conformément au RGPD.</p>
+
+  <h2>Article 6 — Vos droits</h2>
+  <p>Conformément au RGPD, vous disposez des droits suivants :</p>
+  <ul>
+    <li><strong>Droit d'accès</strong> : obtenir une copie de vos données personnelles.</li>
+    <li><strong>Droit de rectification</strong> : corriger des données inexactes ou incomplètes.</li>
+    <li><strong>Droit à l'effacement</strong> : demander la suppression de vos données, dans les limites légales.</li>
+    <li><strong>Droit d'opposition</strong> : vous opposer à certains traitements, notamment à des fins de prospection.</li>
+    <li><strong>Droit à la portabilité</strong> : recevoir vos données dans un format structuré et lisible.</li>
+    <li><strong>Droit de limitation</strong> : demander la suspension d'un traitement.</li>
+  </ul>
+  <p>Pour exercer ces droits, contactez : <a href="mailto:lartdesextensions@gmail.com">lartdesextensions@gmail.com</a>. Une réponse sera apportée dans un délai de 30 jours.</p>
+  <p>En cas de réclamation non résolue, vous pouvez saisir la <strong>CNIL</strong> : <a href="https://www.cnil.fr" target="_blank" rel="noopener">www.cnil.fr</a></p>
+
+  <h2>Article 7 — Cookies</h2>
+  <p>Le site utilise uniquement des cookies techniques strictement nécessaires au fonctionnement (gestion de session, sécurité des formulaires). Aucun cookie publicitaire ou de suivi tiers n'est déposé sans votre consentement.</p>
+
+  <h2>Article 8 — Sécurité</h2>
+  <p>L'Art des Extensions met en œuvre les mesures techniques et organisationnelles appropriées pour protéger vos données contre tout accès non autorisé, perte ou altération, notamment le chiffrement HTTPS et l'utilisation de prestataires de paiement certifiés PCI-DSS.</p>
+
+  <p class="date-maj">Dernière mise à jour : 10 juin 2026</p>
+</section>
+
+<script>
+  function show(id, link) {
+    document.querySelectorAll('section').forEach(s => s.classList.remove('visible'));
+    document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+    document.getElementById(id).classList.add('visible');
+    link.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return false;
+  }
+</script>
+
+</body>
+</html>
