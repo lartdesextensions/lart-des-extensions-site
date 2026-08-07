@@ -6,7 +6,6 @@
 <title>Réservation — L'Art des Extensions</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -240,10 +239,20 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
 </div>
 
 <script>
-const SUPA_URL = 'https://qbznltzitzwqyqtsgsqt.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiem5sdHppdHp3cXlxdHNnc3F0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDg2MzYsImV4cCI6MjA5NzA4NDYzNn0.84Xg35dJ_YAEA3aEjn-WqVjPPNmxElvSGaxeEg4maPw';
-const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 emailjs.init('pnSluawmsGb1F5d_i');
+
+// ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify sécurisée) ──
+async function dbCall(table, action, opts) {
+  opts = opts || {};
+  const res = await fetch('/.netlify/functions/db', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ table, action }, opts))
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erreur base de données');
+  return json;
+}
 
 // STATE
 let selected = { prestation: null, date: null, heure: null };
@@ -315,7 +324,7 @@ let weeklyHoursMap = null;
 
 async function getWeeklyHours() {
   if (weeklyHoursMap) return weeklyHoursMap;
-  const { data } = await sb.from('settings').select('*');
+  const { data } = await dbCall('settings', 'select');
   weeklyHoursMap = {};
   (data || []).forEach(s => weeklyHoursMap[s.key] = s.value);
   return weeklyHoursMap;
@@ -338,7 +347,9 @@ async function renderCalendar() {
   if (!availabilityCache[monthKey]) {
     const start = `${calYear}-${String(calMonth+1).padStart(2,'0')}-01`;
     const end = `${calYear}-${String(calMonth+1).padStart(2,'0')}-31`;
-    const { data } = await sb.from('disponibilites').select('*').gte('date', start).lte('date', end);
+    const { data } = await dbCall('disponibilites', 'select', {
+      filters: [{ col: 'date', op: 'gte', value: start }, { col: 'date', op: 'lte', value: end }]
+    });
     availabilityCache[monthKey] = data || [];
   }
 
@@ -407,8 +418,12 @@ async function renderSlots(dateStr, avail) {
   // Get booked slots + blocages horaires for this date
   if (!bookedCache[dateStr]) {
     const [{ data: rdvs }, { data: blocages }] = await Promise.all([
-      sb.from('reservations').select('heure,duree_min').eq('date', dateStr).neq('statut','annule'),
-      sb.from('indisponibilites').select('heure_debut,heure_fin').eq('date', dateStr)
+      dbCall('reservations', 'select', {
+        filters: [{ col: 'date', op: 'eq', value: dateStr }, { col: 'statut', op: 'neq', value: 'annule' }]
+      }),
+      dbCall('indisponibilites', 'select', {
+        filters: [{ col: 'date', op: 'eq', value: dateStr }]
+      })
     ]);
     const rdvOccupations = (rdvs || []).map(r => ({ heure: r.heure, duree_min: r.duree_min }));
     const blocageOccupations = (blocages || []).map(b => ({
@@ -506,8 +521,11 @@ async function checkBlockedAndProceed() {
   btn.textContent = 'Vérification...';
 
   try {
-    const { data } = await sb.from('clients_bloques').select('*')
-      .or(`email.eq.${email},telephone.eq.${tel}`);
+    const [{ data: byEmail }, { data: byTel }] = await Promise.all([
+      email ? dbCall('clients_bloques', 'select', { filters: [{ col: 'email', op: 'eq', value: email }] }) : Promise.resolve({ data: [] }),
+      tel ? dbCall('clients_bloques', 'select', { filters: [{ col: 'telephone', op: 'eq', value: tel }] }) : Promise.resolve({ data: [] })
+    ]);
+    const data = [...(byEmail || []), ...(byTel || [])];
     if (data && data.length > 0) {
       msgBox.style.display = 'block';
       msgBox.textContent = 'La réservation en ligne n\'est pas disponible pour ces coordonnées. Merci de contacter directement le salon au 07 80 96 38 23.';
@@ -570,19 +588,21 @@ async function ensureReservationSaved() {
   const p = selected.prestation;
   const acompte = Math.round(p.prix * 0.35);
 
-  const { data, error } = await sb.from('reservations').insert({
-    prenom, nom, email, telephone: tel, message,
-    prestation_nom: p.nom,
-    date: selected.date,
-    heure: selected.heure,
-    duree_min: p.duree_min,
-    prix: p.prix,
-    acompte,
-    statut: 'en_attente',
-    acompte_paye: false
-  }).select().single();
+  const { data } = await dbCall('reservations', 'insert', {
+    single: true,
+    payload: {
+      prenom, nom, email, telephone: tel, message,
+      prestation_nom: p.nom,
+      date: selected.date,
+      heure: selected.heure,
+      duree_min: p.duree_min,
+      prix: p.prix,
+      acompte,
+      statut: 'en_attente',
+      acompte_paye: 0
+    }
+  });
 
-  if (error) throw error;
   currentReservationId = data.id;
   return currentReservationId;
 }
@@ -702,7 +722,9 @@ async function handlePaymentReturn() {
   if (!payment) return;
 
   if (payment === 'success' && rdv) {
-    const { data } = await sb.from('reservations').select('*').eq('id', rdv).single();
+    const { data } = await dbCall('reservations', 'select', {
+      single: true, filters: [{ col: 'id', op: 'eq', value: rdv }]
+    });
     if (data) {
       document.getElementById('success-prenom').textContent = `${data.prenom} !`;
     }
