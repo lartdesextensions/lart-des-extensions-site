@@ -1,4 +1,4 @@
-const { createClient } = require('@supabase/supabase-js');
+const { getDb } = require('./lib/turso');
 
 const PAYPAL_API = process.env.PAYPAL_API_BASE || 'https://api-m.paypal.com';
 const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
@@ -84,27 +84,17 @@ exports.handler = async function (event) {
       capture.purchase_units &&
       capture.purchase_units[0].payments.captures[0].id;
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    const db = getDb();
+    const updateRes = await db.execute({
+      sql: `UPDATE reservations SET acompte_paye = ?, payment_method = ?, payment_id = ?, statut = ? WHERE id = ? RETURNING *`,
+      args: [1, 'paypal', captureId || orderID, 'confirme', reservationId]
+    });
+    const updated = updateRes.rows[0];
 
-    const { data: updated, error } = await supabase
-      .from('reservations')
-      .update({
-        acompte_paye: true,
-        payment_method: 'paypal',
-        payment_id: captureId || orderID,
-        statut: 'confirme'
-      })
-      .eq('id', reservationId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Erreur mise à jour Supabase (PayPal):', error.message);
-    } else if (updated) {
+    if (updated) {
       await sendConfirmationEmail(updated);
+    } else {
+      console.error('Réservation introuvable pour mise à jour PayPal:', reservationId);
     }
 
     return {
