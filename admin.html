@@ -988,12 +988,43 @@ function cancelCancelFlow() {
 }
 async function finalizeCancel(remboursed) {
   if (!currentRdv) return;
+
+  let autoRefundOutcome = null; // 'success' | 'failed' | 'not_applicable'
+
+  if (remboursed) {
+    if (currentRdv.payment_method === 'stripe' && currentRdv.acompte_paye) {
+      try {
+        const res = await fetch('/.netlify/functions/refund', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reservationId: currentRdv.id })
+        });
+        const data = await res.json();
+        autoRefundOutcome = res.ok ? 'success' : 'failed';
+        if (!res.ok) console.error('Erreur remboursement:', data.error);
+      } catch (err) {
+        autoRefundOutcome = 'failed';
+        console.error('Erreur remboursement:', err);
+      }
+    } else {
+      autoRefundOutcome = 'not_applicable';
+    }
+  }
+
   await dbCall('reservations', 'update', {
-    payload: { statut: 'annule', acompte_rembourse: remboursed },
+    payload: { statut: 'annule', acompte_rembourse: remboursed && autoRefundOutcome !== 'failed' },
     filters: [{ col: 'id', op: 'eq', value: currentRdv.id }]
   });
   closeModal();
   refreshAllViews();
+
+  if (autoRefundOutcome === 'success') {
+    alert('✓ Remboursement effectué automatiquement sur Stripe.');
+  } else if (autoRefundOutcome === 'failed') {
+    alert('⚠️ Le remboursement automatique a échoué. Merci de rembourser manuellement sur le dashboard Stripe.');
+  } else if (autoRefundOutcome === 'not_applicable') {
+    alert('Aucun paiement Stripe trouvé pour cette réservation (PayPal, espèces, ou non payée) — pensez à rembourser manuellement si besoin.');
+  }
 }
 async function deleteRdv() {
   if (!currentRdv) return;
