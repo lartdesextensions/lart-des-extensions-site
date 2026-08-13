@@ -18,8 +18,9 @@ async function sendConfirmationEmail(r) {
         total: r.prix,
         acompte: r.acompte,
         reste: r.prix - r.acompte,
-        date_rdv: `${dateLabel} à ${r.heure}`,
-        telephone: r.telephone
+        date_rdv: dateLabel,
+        heure_rdv: r.heure,
+        telephone_cliente: r.telephone
       }
     };
     if (process.env.EMAILJS_PRIVATE_KEY) {
@@ -32,10 +33,10 @@ async function sendConfirmationEmail(r) {
     });
     if (!res.ok) {
       const text = await res.text();
-      console.error('Erreur envoi email (Stripe):', text);
+      console.error('Erreur envoi email admin (Stripe):', text);
     }
   } catch (e) {
-    console.error('Erreur envoi email (Stripe):', e);
+    console.error('Erreur envoi email admin (Stripe):', e);
   }
 }
 
