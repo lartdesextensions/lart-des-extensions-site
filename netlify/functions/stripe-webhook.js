@@ -3,25 +3,13 @@ const { getDb } = require('./lib/turso');
 
 const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
-async function sendConfirmationEmail(r) {
+async function sendEmail(templateId, templateParams) {
   try {
-    const [y, m, d] = r.date.split('-').map(Number);
-    const dateLabel = `${d} ${MONTHS_FR[m - 1]} ${y}`;
     const payload = {
       service_id: 'service_8xq5hij',
-      template_id: 'template_bae1d9m',
+      template_id: templateId,
       user_id: 'pnSluawmsGb1F5d_i',
-      template_params: {
-        nom_cliente: `${r.prenom} ${r.nom}`,
-        email_cliente: r.email,
-        prestation: r.prestation_nom,
-        total: r.prix,
-        acompte: r.acompte,
-        reste: r.prix - r.acompte,
-        date_rdv: dateLabel,
-        heure_rdv: r.heure,
-        telephone_cliente: r.telephone
-      }
+      template_params: templateParams
     };
     if (process.env.EMAILJS_PRIVATE_KEY) {
       payload.accessToken = process.env.EMAILJS_PRIVATE_KEY;
@@ -33,11 +21,34 @@ async function sendConfirmationEmail(r) {
     });
     if (!res.ok) {
       const text = await res.text();
-      console.error('Erreur envoi email admin (Stripe):', text);
+      console.error(`Erreur envoi email (${templateId}):`, text);
     }
   } catch (e) {
-    console.error('Erreur envoi email admin (Stripe):', e);
+    console.error(`Erreur envoi email (${templateId}):`, e);
   }
+}
+
+async function sendConfirmationEmails(r) {
+  const [y, m, d] = r.date.split('-').map(Number);
+  const dateLabel = `${d} ${MONTHS_FR[m - 1]} ${y}`;
+
+  const commonParams = {
+    nom_cliente: `${r.prenom} ${r.nom}`,
+    email_cliente: r.email,
+    prestation: r.prestation_nom,
+    total: r.prix,
+    acompte: r.acompte,
+    reste: r.prix - r.acompte,
+    date_rdv: dateLabel,
+    heure_rdv: r.heure,
+    telephone_cliente: r.telephone
+  };
+
+  // Email pour elle-même (notification interne)
+  await sendEmail('template_bae1d9m', commonParams);
+
+  // Email pour la cliente (confirmation de réservation)
+  await sendEmail('template_ki0fg15', commonParams);
 }
 
 exports.handler = async function (event) {
@@ -69,7 +80,7 @@ exports.handler = async function (event) {
       const updated = updateRes.rows[0];
 
       if (updated) {
-        await sendConfirmationEmail(updated);
+        await sendConfirmationEmails(updated);
       } else {
         console.error('Réservation introuvable pour mise à jour Stripe:', reservationId);
       }
