@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin — L'Art des Extensions</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{--cream:#FAF8F5;--beige:#F0EBE3;--beige-mid:#DDD0C0;--taupe:#B59F88;--taupe-dark:#8A7560;--brown:#6B5744;--dark:#1F1F1F;--white:#fff;--success:#4CAF50;--error:#E53935;--warn:#FF9800;}
@@ -420,10 +419,20 @@ tr:hover td{background:var(--cream);}
 </div>
 
 <script>
-const SUPA_URL = 'https://qbznltzitzwqyqtsgsqt.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiem5sdHppdHp3cXlxdHNnc3F0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDg2MzYsImV4cCI6MjA5NzA4NDYzNn0.84Xg35dJ_YAEA3aEjn-WqVjPPNmxElvSGaxeEg4maPw';
-const sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 const ADMIN_PWD = 'Miamore10253!';
+
+// ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify sécurisée) ──
+async function dbCall(table, action, opts) {
+  opts = opts || {};
+  const res = await fetch('/.netlify/functions/db', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ table, action }, opts))
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Erreur base de données');
+  return json;
+}
 
 // ── AUTH ──
 function login() {
@@ -472,7 +481,10 @@ async function loadDashboard() {
   const weekStart = fmtDate(startOfWeek(new Date()));
   const weekEnd = fmtDate(endOfWeek(new Date()));
 
-  const { data: rdvs } = await sb.from('reservations').select('*').neq('statut','annule').order('date').order('heure');
+  const { data: rdvs } = await dbCall('reservations', 'select', {
+    filters: [{ col: 'statut', op: 'neq', value: 'annule' }],
+    order: [{ col: 'date' }, { col: 'heure' }]
+  });
   if (!rdvs) return;
   const todayRdv = rdvs.filter(r => r.date === today);
   const weekRdv = rdvs.filter(r => r.date >= weekStart && r.date <= weekEnd);
@@ -496,7 +508,10 @@ let editingRdvId = null;
 
 async function ensureNrPrestationsLoaded() {
   if (nrPrestations.length > 0) return;
-  const { data } = await sb.from('prestations').select('*').eq('actif', true).order('ordre');
+  const { data } = await dbCall('prestations', 'select', {
+    filters: [{ col: 'actif', op: 'eq', value: true }],
+    order: [{ col: 'ordre' }]
+  });
   nrPrestations = data || [];
   const options = '<option value="">— Choisir une prestation —</option>' +
     nrPrestations.map((p, i) => `<option value="${i}">${p.nom} — ${p.prix} €</option>`).join('') +
@@ -669,16 +684,20 @@ async function saveNewRdv() {
     date, heure, duree_min: duree, prix, acompte
   };
 
-  let error;
-  if (editingRdvId) {
-    ({ error } = await sb.from('reservations').update(payload).eq('id', editingRdvId));
-  } else {
-    ({ error } = await sb.from('reservations').insert({ ...payload, email: '', message: '', statut: 'confirme' }));
-  }
-
-  if (error) {
+  try {
+    if (editingRdvId) {
+      await dbCall('reservations', 'update', {
+        payload,
+        filters: [{ col: 'id', op: 'eq', value: editingRdvId }]
+      });
+    } else {
+      await dbCall('reservations', 'insert', {
+        payload: { ...payload, email: '', message: '', statut: 'confirme' }
+      });
+    }
+  } catch (err) {
     msg.style.color = 'var(--error)';
-    msg.textContent = 'Erreur : ' + error.message;
+    msg.textContent = 'Erreur : ' + err.message;
     return;
   }
 
@@ -720,9 +739,17 @@ async function loadAgenda() {
   const dow = new Date(date).getDay();
 
   const [{ data: rdvs }, { data: blocages }, { data: dispos }] = await Promise.all([
-    sb.from('reservations').select('*').eq('date', date).neq('statut', 'annule').order('heure'),
-    sb.from('indisponibilites').select('*').eq('date', date).order('heure_debut'),
-    sb.from('disponibilites').select('*').eq('date', date)
+    dbCall('reservations', 'select', {
+      filters: [{ col: 'date', op: 'eq', value: date }, { col: 'statut', op: 'neq', value: 'annule' }],
+      order: [{ col: 'heure' }]
+    }),
+    dbCall('indisponibilites', 'select', {
+      filters: [{ col: 'date', op: 'eq', value: date }],
+      order: [{ col: 'heure_debut' }]
+    }),
+    dbCall('disponibilites', 'select', {
+      filters: [{ col: 'date', op: 'eq', value: date }]
+    })
   ]);
   agendaData = rdvs || [];
   agendaBlocages = blocages || [];
@@ -891,9 +918,12 @@ function showBlocageInfo(b) {
 let currentRdv = null;
 async function loadReservations() {
   const statut = document.getElementById('filter-statut').value;
-  let q = sb.from('reservations').select('*').order('date', {ascending:false}).order('heure');
-  if (statut) q = q.eq('statut', statut);
-  const { data } = await q;
+  const filters = [];
+  if (statut) filters.push({ col: 'statut', op: 'eq', value: statut });
+  const { data } = await dbCall('reservations', 'select', {
+    filters,
+    order: [{ col: 'date', ascending: false }, { col: 'heure' }]
+  });
   const tbody = document.getElementById('rdv-tbody');
   if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--taupe);">Aucune réservation.</td></tr>'; return; }
   tbody.innerHTML = data.map(r => `<tr>
@@ -940,7 +970,10 @@ function closeModal() { document.getElementById('modal-rdv').classList.remove('o
 
 async function changeStatut(s) {
   if (!currentRdv) return;
-  await sb.from('reservations').update({ statut: s }).eq('id', currentRdv.id);
+  await dbCall('reservations', 'update', {
+    payload: { statut: s },
+    filters: [{ col: 'id', op: 'eq', value: currentRdv.id }]
+  });
   closeModal();
   refreshAllViews();
 }
@@ -955,20 +988,26 @@ function cancelCancelFlow() {
 }
 async function finalizeCancel(remboursed) {
   if (!currentRdv) return;
-  await sb.from('reservations').update({ statut: 'annule', acompte_rembourse: remboursed }).eq('id', currentRdv.id);
+  await dbCall('reservations', 'update', {
+    payload: { statut: 'annule', acompte_rembourse: remboursed },
+    filters: [{ col: 'id', op: 'eq', value: currentRdv.id }]
+  });
   closeModal();
   refreshAllViews();
 }
 async function deleteRdv() {
   if (!currentRdv) return;
   if (!confirm('Supprimer définitivement ce rendez-vous ? Cette action est irréversible.')) return;
-  const { error, data } = await sb.from('reservations').delete().eq('id', currentRdv.id).select();
-  if (error) {
-    alert('La suppression a échoué : ' + error.message + '\n\nCela vient probablement d\'une règle de sécurité (RLS) sur la table "reservations" dans Supabase qui bloque les suppressions.');
-    return;
-  }
-  if (!data || data.length === 0) {
-    alert('La suppression n\'a rien modifié dans la base — c\'est très probablement une règle de sécurité (RLS) sur Supabase qui empêche la suppression. Il faut ajouter une policy DELETE pour la table "reservations".');
+  try {
+    const { data } = await dbCall('reservations', 'delete', {
+      filters: [{ col: 'id', op: 'eq', value: currentRdv.id }]
+    });
+    if (!data || data.length === 0) {
+      alert('La suppression n\'a rien modifié dans la base.');
+      return;
+    }
+  } catch (err) {
+    alert('La suppression a échoué : ' + err.message);
     return;
   }
   closeModal();
@@ -982,7 +1021,9 @@ function refreshAllViews() {
 
 // ── CLIENTS BLOQUES ──
 async function loadBloques() {
-  const { data } = await sb.from('clients_bloques').select('*').order('created_at', { ascending: false });
+  const { data } = await dbCall('clients_bloques', 'select', {
+    order: [{ col: 'created_at', ascending: false }]
+  });
   const tbody = document.getElementById('bloques-tbody');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--taupe);">Aucune cliente bloquée.</td></tr>';
@@ -1008,10 +1049,13 @@ async function addBloque() {
     return;
   }
 
-  const { error } = await sb.from('clients_bloques').insert({ email: email || null, telephone: telephone || null, raison: raison || null });
-  if (error) {
+  try {
+    await dbCall('clients_bloques', 'insert', {
+      payload: { email: email || null, telephone: telephone || null, raison: raison || null }
+    });
+  } catch (err) {
     msg.style.color = 'var(--error)';
-    msg.textContent = 'Erreur : ' + error.message;
+    msg.textContent = 'Erreur : ' + err.message;
     return;
   }
   document.getElementById('bl-email').value = '';
@@ -1024,20 +1068,23 @@ async function addBloque() {
 
 async function deleteBloque(id) {
   if (!confirm('Débloquer cette cliente ? Elle pourra à nouveau réserver en ligne.')) return;
-  await sb.from('clients_bloques').delete().eq('id', id);
+  await dbCall('clients_bloques', 'delete', { filters: [{ col: 'id', op: 'eq', value: id }] });
   loadBloques();
 }
 
 async function blockCurrentClient() {
   if (!currentRdv) return;
   if (!confirm(`Bloquer ${currentRdv.prenom} ${currentRdv.nom} pour toute nouvelle réservation en ligne ?`)) return;
-  const { error } = await sb.from('clients_bloques').insert({
-    email: (currentRdv.email || '').trim().toLowerCase() || null,
-    telephone: (currentRdv.telephone || '').trim() || null,
-    raison: 'Bloquée depuis une réservation'
-  });
-  if (error) {
-    alert('Erreur lors du blocage : ' + error.message);
+  try {
+    await dbCall('clients_bloques', 'insert', {
+      payload: {
+        email: (currentRdv.email || '').trim().toLowerCase() || null,
+        telephone: (currentRdv.telephone || '').trim() || null,
+        raison: 'Bloquée depuis une réservation'
+      }
+    });
+  } catch (err) {
+    alert('Erreur lors du blocage : ' + err.message);
     return;
   }
   alert('Cliente bloquée. Elle ne pourra plus réserver en ligne.');
@@ -1054,7 +1101,7 @@ let currentJourData = null;
 let weeklyHoursMap = {};
 
 async function fetchWeeklySettings() {
-  const { data } = await sb.from('settings').select('*');
+  const { data } = await dbCall('settings', 'select');
   weeklyHoursMap = {};
   (data || []).forEach(s => weeklyHoursMap[s.key] = s.value);
   return weeklyHoursMap;
@@ -1070,8 +1117,16 @@ async function renderAdminCal() {
   const start = `${adminYear}-${String(adminMonth+1).padStart(2,'0')}-01`;
   const end = `${adminYear}-${String(adminMonth+1).padStart(2,'0')}-31`;
   const [{ data: dispos }, { data: rdvs }] = await Promise.all([
-    sb.from('disponibilites').select('*').gte('date', start).lte('date', end),
-    sb.from('reservations').select('date').gte('date', start).lte('date', end).neq('statut','annule')
+    dbCall('disponibilites', 'select', {
+      filters: [{ col: 'date', op: 'gte', value: start }, { col: 'date', op: 'lte', value: end }]
+    }),
+    dbCall('reservations', 'select', {
+      filters: [
+        { col: 'date', op: 'gte', value: start },
+        { col: 'date', op: 'lte', value: end },
+        { col: 'statut', op: 'neq', value: 'annule' }
+      ]
+    })
   ]);
   adminDispos = dispos || [];
   adminRdvs = rdvs || [];
@@ -1136,9 +1191,14 @@ async function toggleFermer() {
   const dispo = adminDispos.find(a => a.date === currentJourDate);
   const isClosed = dispo?.ferme;
   if (dispo) {
-    await sb.from('disponibilites').update({ ferme: !isClosed }).eq('id', dispo.id);
+    await dbCall('disponibilites', 'update', {
+      payload: { ferme: !isClosed },
+      filters: [{ col: 'id', op: 'eq', value: dispo.id }]
+    });
   } else {
-    await sb.from('disponibilites').insert({ date: currentJourDate, ferme: true, heure_debut: '09:00', heure_fin: '17:00' });
+    await dbCall('disponibilites', 'insert', {
+      payload: { date: currentJourDate, ferme: true, heure_debut: '09:00', heure_fin: '17:00' }
+    });
   }
   closeJourModal();
   renderAdminCal();
@@ -1149,9 +1209,14 @@ async function saveJourHours() {
   const end = document.getElementById('jour-end').value;
   const dispo = adminDispos.find(a => a.date === currentJourDate);
   if (dispo) {
-    await sb.from('disponibilites').update({ heure_debut: start, heure_fin: end, ferme: false }).eq('id', dispo.id);
+    await dbCall('disponibilites', 'update', {
+      payload: { heure_debut: start, heure_fin: end, ferme: false },
+      filters: [{ col: 'id', op: 'eq', value: dispo.id }]
+    });
   } else {
-    await sb.from('disponibilites').insert({ date: currentJourDate, heure_debut: start, heure_fin: end, ferme: false });
+    await dbCall('disponibilites', 'insert', {
+      payload: { date: currentJourDate, heure_debut: start, heure_fin: end, ferme: false }
+    });
   }
   closeJourModal();
   renderAdminCal();
@@ -1169,8 +1234,7 @@ async function fermerPeriode() {
     if (!isWeekdayClosed(cur.getDay())) rows.push({ date: fmtDate(cur), ferme: true, heure_debut: '09:00', heure_fin: '17:00' });
     cur.setDate(cur.getDate() + 1);
   }
-  // Upsert
-  await sb.from('disponibilites').upsert(rows, { onConflict: 'date' });
+  await dbCall('disponibilites', 'upsert', { payload: rows, onConflict: 'date' });
   showMsg('period-msg', `${rows.length} jours fermés avec succès.`, true);
   renderAdminCal();
 }
@@ -1183,7 +1247,7 @@ const WEEKDAYS = [
 ];
 
 async function loadWeeklyHours() {
-  const { data } = await sb.from('settings').select('*');
+  const { data } = await dbCall('settings', 'select');
   const map = {};
   (data || []).forEach(s => map[s.key] = s.value);
 
@@ -1220,14 +1284,17 @@ async function saveWeeklyHours() {
     rows.push({ key: `hours_${w.i}_start`, value: start });
     rows.push({ key: `hours_${w.i}_end`, value: end });
   });
-  await sb.from('settings').upsert(rows, { onConflict: 'key' });
+  await dbCall('settings', 'upsert', { payload: rows, onConflict: 'key' });
   showMsg('hours-msg', 'Horaires enregistrés.', true);
 }
 
 // ── BLOCAGES HORAIRES (indisponibilités partielles) ──
 async function loadBlocages() {
   const today = fmtDate(new Date());
-  const { data } = await sb.from('indisponibilites').select('*').gte('date', today).order('date').order('heure_debut');
+  const { data } = await dbCall('indisponibilites', 'select', {
+    filters: [{ col: 'date', op: 'gte', value: today }],
+    order: [{ col: 'date' }, { col: 'heure_debut' }]
+  });
   const tbody = document.getElementById('blocages-tbody');
   if (!data || data.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--taupe);">Aucun blocage à venir.</td></tr>';
@@ -1254,10 +1321,13 @@ async function addBlocageHeure() {
     return;
   }
 
-  const { error } = await sb.from('indisponibilites').insert({ date, heure_debut: start, heure_fin: end, motif: motif || null });
-  if (error) {
+  try {
+    await dbCall('indisponibilites', 'insert', {
+      payload: { date, heure_debut: start, heure_fin: end, motif: motif || null }
+    });
+  } catch (err) {
     msg.style.color = 'var(--error)';
-    msg.textContent = 'Erreur : ' + error.message;
+    msg.textContent = 'Erreur : ' + err.message;
     return;
   }
   msg.style.color = 'var(--success)';
@@ -1271,14 +1341,14 @@ async function addBlocageHeure() {
 
 async function deleteBlocage(id) {
   if (!confirm('Supprimer ce blocage et rouvrir ce créneau à la réservation ?')) return;
-  await sb.from('indisponibilites').delete().eq('id', id);
+  await dbCall('indisponibilites', 'delete', { filters: [{ col: 'id', op: 'eq', value: id }] });
   loadBlocages();
 }
 
 // ── PRESTATIONS ──
 let editPrestId = null;
 async function loadPrestations() {
-  const { data } = await sb.from('prestations').select('*').order('ordre');
+  const { data } = await dbCall('prestations', 'select', { order: [{ col: 'ordre' }] });
   const tbody = document.getElementById('prest-tbody');
   if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--taupe);">Aucune prestation.</td></tr>'; return; }
   tbody.innerHTML = data.map(p => `<tr>
@@ -1313,11 +1383,19 @@ async function savePrest() {
   const duree_min = parseInt(document.getElementById('pf-dur').value);
   if (!nom || !prix || !duree_min) { showMsg('prest-msg', 'Tous les champs sont requis.', false); return; }
   if (editPrestId) {
-    await sb.from('prestations').update({ nom, prix, duree_min }).eq('id', editPrestId);
+    await dbCall('prestations', 'update', {
+      payload: { nom, prix, duree_min },
+      filters: [{ col: 'id', op: 'eq', value: editPrestId }]
+    });
   } else {
-    const { data: max } = await sb.from('prestations').select('ordre').order('ordre', {ascending:false}).limit(1);
+    const { data: max } = await dbCall('prestations', 'select', {
+      order: [{ col: 'ordre', ascending: false }],
+      limit: 1
+    });
     const ordre = max?.[0]?.ordre + 1 || 1;
-    await sb.from('prestations').insert({ nom, prix, duree_min, actif: true, ordre });
+    await dbCall('prestations', 'insert', {
+      payload: { nom, prix, duree_min, actif: true, ordre }
+    });
   }
   showMsg('prest-msg', 'Prestation enregistrée !', true);
   resetPrestForm();
@@ -1325,7 +1403,10 @@ async function savePrest() {
 }
 
 async function togglePrest(id, actif) {
-  await sb.from('prestations').update({ actif: !actif }).eq('id', id);
+  await dbCall('prestations', 'update', {
+    payload: { actif: !actif },
+    filters: [{ col: 'id', op: 'eq', value: id }]
+  });
   loadPrestations();
 }
 
