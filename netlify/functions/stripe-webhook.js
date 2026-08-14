@@ -1,7 +1,35 @@
 const Stripe = require('stripe');
+const https = require('https');
 const { getDb } = require('./lib/turso');
 
 const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+function postJson(hostname, path, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = https.request(
+      {
+        hostname,
+        path,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(data)
+        }
+      },
+      (res) => {
+        let responseBody = '';
+        res.on('data', (chunk) => { responseBody += chunk; });
+        res.on('end', () => {
+          resolve({ statusCode: res.statusCode, body: responseBody });
+        });
+      }
+    );
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
 
 async function sendEmail(templateId, templateParams) {
   try {
@@ -14,14 +42,11 @@ async function sendEmail(templateId, templateParams) {
     if (process.env.EMAILJS_PRIVATE_KEY) {
       payload.accessToken = process.env.EMAILJS_PRIVATE_KEY;
     }
-    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      console.error(`Erreur envoi email (${templateId}):`, text);
+    const res = await postJson('api.emailjs.com', '/api/v1.0/email/send', payload);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      console.error(`Erreur envoi email (${templateId}): [${res.statusCode}]`, res.body);
+    } else {
+      console.log(`Email envoyé avec succès (${templateId})`);
     }
   } catch (e) {
     console.error(`Erreur envoi email (${templateId}):`, e);
