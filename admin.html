@@ -434,7 +434,7 @@ tr:hover td{background:var(--cream);}
 </div>
 
 <script>
-const ADMIN_PWD = 'Miamore10253!';
+const DEFAULT_ADMIN_PWD = 'Miamore10253!';
 
 // ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify sécurisée) ──
 async function dbCall(table, action, opts) {
@@ -449,9 +449,26 @@ async function dbCall(table, action, opts) {
   return json;
 }
 
+async function getStoredAdminPwd() {
+  try {
+    const { data } = await dbCall('settings', 'select', {
+      filters: [{ col: 'key', op: 'eq', value: 'admin_password' }],
+      single: true
+    });
+    return (data && data.value) ? data.value : DEFAULT_ADMIN_PWD;
+  } catch (e) {
+    return DEFAULT_ADMIN_PWD;
+  }
+}
+
 // ── AUTH ──
-function login() {
-  if (document.getElementById('pwd').value === ADMIN_PWD) {
+async function login() {
+  const entered = document.getElementById('pwd').value;
+  const btn = document.querySelector('.login-box .btn');
+  if (btn) btn.disabled = true;
+  const currentPwd = await getStoredAdminPwd();
+  if (btn) btn.disabled = false;
+  if (entered === currentPwd) {
     sessionStorage.setItem('admin', '1');
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
@@ -463,6 +480,47 @@ function login() {
 function logout() {
   sessionStorage.removeItem('admin');
   location.reload();
+}
+
+async function changePassword() {
+  const current = document.getElementById('pw-current').value;
+  const next = document.getElementById('pw-new').value;
+  const confirm = document.getElementById('pw-confirm').value;
+  const msg = document.getElementById('pw-msg');
+
+  const currentPwd = await getStoredAdminPwd();
+  if (current !== currentPwd) {
+    msg.className = 'msg msg-err';
+    msg.textContent = 'Mot de passe actuel incorrect.';
+    return;
+  }
+  if (!next || next.length < 6) {
+    msg.className = 'msg msg-err';
+    msg.textContent = 'Le nouveau mot de passe doit contenir au moins 6 caractères.';
+    return;
+  }
+  if (next !== confirm) {
+    msg.className = 'msg msg-err';
+    msg.textContent = 'Les deux mots de passe ne correspondent pas.';
+    return;
+  }
+
+  try {
+    await dbCall('settings', 'upsert', {
+      payload: { key: 'admin_password', value: next },
+      onConflict: 'key'
+    });
+  } catch (e) {
+    msg.className = 'msg msg-err';
+    msg.textContent = 'Erreur : ' + e.message;
+    return;
+  }
+
+  document.getElementById('pw-current').value = '';
+  document.getElementById('pw-new').value = '';
+  document.getElementById('pw-confirm').value = '';
+  msg.className = 'msg msg-ok';
+  msg.textContent = 'Mot de passe changé avec succès.';
 }
 
 // ── NAV ──
