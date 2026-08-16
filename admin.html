@@ -792,7 +792,8 @@ async function saveNewRdv() {
       });
     } else {
       const { data } = await dbCall('reservations', 'insert', {
-        payload: { ...payload, message: '', statut: 'confirme' }
+        payload: { ...payload, message: '', statut: 'confirme' },
+        single: true
       });
       newReservationId = data && data.id;
     }
