@@ -3,7 +3,7 @@ const { getDb } = require('./lib/turso');
 // Tables autorisées et leurs colonnes (anti-injection : rien d'autre n'est accepté)
 const TABLES = {
   reservations: ['id','prenom','nom','telephone','email','message','prestation_nom','date','heure','duree_min','prix','acompte','statut','acompte_rembourse','acompte_paye','payment_method','payment_id','created_at'],
-  prestations: ['id','nom','prix','duree_min','actif','ordre'],
+  prestations: ['id','nom','prix','duree_min','actif','ordre','categorie','sous_categorie'],
   disponibilites: ['id','date','ferme','heure_debut','heure_fin'],
   indisponibilites: ['id','date','heure_debut','heure_fin','motif'],
   clients_bloques: ['id','email','telephone','raison','created_at'],
