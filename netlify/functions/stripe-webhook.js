@@ -1,80 +1,6 @@
 const Stripe = require('stripe');
-const https = require('https');
 const { getDb } = require('./lib/turso');
-
-const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-
-function postJson(hostname, path, body) {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify(body);
-    const req = https.request(
-      {
-        hostname,
-        path,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(data)
-        }
-      },
-      (res) => {
-        let responseBody = '';
-        res.on('data', (chunk) => { responseBody += chunk; });
-        res.on('end', () => {
-          resolve({ statusCode: res.statusCode, body: responseBody });
-        });
-      }
-    );
-    req.on('error', reject);
-    req.write(data);
-    req.end();
-  });
-}
-
-async function sendEmail(templateId, templateParams) {
-  try {
-    const payload = {
-      service_id: 'service_8xq5hij',
-      template_id: templateId,
-      user_id: 'pnSluawmsGb1F5d_i',
-      template_params: templateParams
-    };
-    if (process.env.EMAILJS_PRIVATE_KEY) {
-      payload.accessToken = process.env.EMAILJS_PRIVATE_KEY;
-    }
-    const res = await postJson('api.emailjs.com', '/api/v1.0/email/send', payload);
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      console.error(`Erreur envoi email (${templateId}): [${res.statusCode}]`, res.body);
-    } else {
-      console.log(`Email envoyé avec succès (${templateId})`);
-    }
-  } catch (e) {
-    console.error(`Erreur envoi email (${templateId}):`, e);
-  }
-}
-
-async function sendConfirmationEmails(r) {
-  const [y, m, d] = r.date.split('-').map(Number);
-  const dateLabel = `${d} ${MONTHS_FR[m - 1]} ${y}`;
-
-  const commonParams = {
-    nom_cliente: `${r.prenom} ${r.nom}`,
-    email_cliente: r.email,
-    prestation: r.prestation_nom,
-    total: r.prix,
-    acompte: r.acompte,
-    reste: r.prix - r.acompte,
-    date_rdv: dateLabel,
-    heure_rdv: r.heure,
-    telephone_cliente: r.telephone
-  };
-
-  // Email pour elle-même (notification interne)
-  await sendEmail('template_bae1d9m', commonParams);
-
-  // Email pour la cliente (confirmation de réservation)
-  await sendEmail('template_ki0fg15', commonParams);
-}
+const { sendConfirmationEmail } = require('./lib/email');
 
 exports.handler = async function (event) {
   const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
@@ -105,7 +31,7 @@ exports.handler = async function (event) {
       const updated = updateRes.rows[0];
 
       if (updated) {
-        await sendConfirmationEmails(updated);
+        await sendConfirmationEmail(updated);
       } else {
         console.error('Réservation introuvable pour mise à jour Stripe:', reservationId);
       }
