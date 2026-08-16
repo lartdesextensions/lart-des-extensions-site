@@ -803,11 +803,19 @@ async function saveNewRdv() {
   }
 
   if (newReservationId && email) {
-    fetch('/.netlify/functions/send-confirmation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reservationId: newReservationId })
-    }).catch(err => console.error('Erreur envoi confirmation:', err));
+    try {
+      const res = await fetch('/.netlify/functions/send-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reservationId: newReservationId })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert('Le RDV est bien enregistré, mais l\'email de confirmation n\'a pas pu être envoyé :\n' + (data.error || res.statusText));
+      }
+    } catch (err) {
+      alert('Le RDV est bien enregistré, mais l\'email de confirmation n\'a pas pu être envoyé :\n' + err.message);
+    }
   }
 
   closeNewRdvModal();
