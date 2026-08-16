@@ -1,5 +1,5 @@
 const { getDb } = require('./lib/turso');
-const { sendConfirmationEmail } = require('./lib/email');
+const { sendClientConfirmationEmail } = require('./lib/email');
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
@@ -25,7 +25,7 @@ exports.handler = async function (event) {
       return json({ error: 'Cette réservation n\'a pas d\'email renseigné' }, 400);
     }
 
-    const result = await sendConfirmationEmail(reservation);
+    const result = await sendClientConfirmationEmail(reservation);
     if (!result.ok) {
       return json({ error: result.error || 'Échec de l\'envoi de l\'email' }, 500);
     }
