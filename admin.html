@@ -71,6 +71,13 @@ tr:hover td{background:var(--cream);}
 .action-btn.red{color:var(--error);}
 .action-btn.red:hover{border-color:var(--error);}
 
+/* GROUPES PRESTATIONS (catégorie / sous-catégorie) */
+#prest-groups summary{list-style:none;}
+#prest-groups summary::-webkit-details-marker{display:none;}
+#prest-groups summary::before{content:'▸';display:inline-block;margin-right:8px;transition:transform .15s;}
+#prest-groups details[open] summary::before{transform:rotate(90deg);}
+#prest-groups table{border-top:1px solid var(--beige);}
+
 /* CALENDAR ADMIN */
 .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
 .cal-title{font-family:'Cormorant Garamond',serif;font-size:1.2rem;}
@@ -277,15 +284,16 @@ tr:hover td{background:var(--cream);}
     <div class="section" id="sec-prestations">
       <div class="content-title">Prestations</div>
       <div class="content-sub">Gérer le catalogue de prestations</div>
-      <div class="table-wrap" style="margin-bottom:20px;">
-        <table>
-          <thead><tr><th>Nom</th><th>Prix</th><th>Durée</th><th>Actif</th><th>Actions</th></tr></thead>
-          <tbody id="prest-tbody"></tbody>
-        </table>
-      </div>
+      <div id="prest-groups" style="margin-bottom:20px;"></div>
       <div class="form-card" id="prest-form-card">
         <div class="form-card-title" id="prest-form-title">Ajouter une prestation</div>
         <div class="field" style="margin-bottom:12px;"><label>Nom</label><input type="text" id="pf-nom" placeholder="Ex: Balayage signature"></div>
+        <div class="field-row">
+          <div class="field"><label>Catégorie</label><input type="text" id="pf-categorie" list="pf-categorie-list" placeholder="Ex: Bandes Adhésives"></div>
+          <div class="field"><label>Sous-catégorie (optionnel)</label><input type="text" id="pf-sous-categorie" list="pf-sous-categorie-list" placeholder="Ex: Nouvelle pose"></div>
+        </div>
+        <datalist id="pf-categorie-list"></datalist>
+        <datalist id="pf-sous-categorie-list"></datalist>
         <div class="field-row">
           <div class="field"><label>Prix (€)</label><input type="number" id="pf-prix" placeholder="150"></div>
           <div class="field"><label>Durée (minutes)</label><input type="number" id="pf-dur" placeholder="120"></div>
@@ -586,12 +594,27 @@ async function ensureNrPrestationsLoaded() {
     order: [{ col: 'ordre' }]
   });
   nrPrestations = data || [];
-  const options = '<option value="">— Choisir une prestation —</option>' +
-    nrPrestations.map((p, i) => `<option value="${i}">${p.nom} — ${p.prix} €</option>`).join('') +
+  document.getElementById('nr-prestation').innerHTML =
+    '<option value="">— Choisir une prestation —</option>' +
+    buildGroupedOptions(nrPrestations) +
     '<option value="autre">Autre (saisie libre)</option>';
-  document.getElementById('nr-prestation').innerHTML = options;
-  document.getElementById('nr-add-prestation').innerHTML = '<option value="">— Choisir —</option>' +
-    nrPrestations.map((p, i) => `<option value="${i}">${p.nom} — ${p.prix} €</option>`).join('');
+  document.getElementById('nr-add-prestation').innerHTML =
+    '<option value="">— Choisir —</option>' +
+    buildGroupedOptions(nrPrestations);
+}
+
+function buildGroupedOptions(list) {
+  const groups = [];
+  const idx = {};
+  list.forEach((p, i) => {
+    const label = p.categorie ? (p.categorie + (p.sous_categorie ? ' — ' + p.sous_categorie : '')) : 'Autre';
+    if (!(label in idx)) { idx[label] = []; groups.push(label); }
+    idx[label].push({ p, i });
+  });
+  return groups.map(label => {
+    const opts = idx[label].map(({ p, i }) => `<option value="${i}">${p.nom} — ${p.prix} €</option>`).join('');
+    return `<optgroup label="${label}">${opts}</optgroup>`;
+  }).join('');
 }
 
 async function openNewRdvModal() {
@@ -1464,23 +1487,62 @@ async function deleteBlocage(id) {
 
 // ── PRESTATIONS ──
 let editPrestId = null;
+let allPrestations = [];
+
 async function loadPrestations() {
   const { data } = await dbCall('prestations', 'select', { order: [{ col: 'ordre' }] });
-  const tbody = document.getElementById('prest-tbody');
-  if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--taupe);">Aucune prestation.</td></tr>'; return; }
-  tbody.innerHTML = data.map(p => `<tr>
-    <td>${p.nom}</td><td>${p.prix} €</td><td>${formatDur(p.duree_min)}</td>
-    <td>${p.actif ? '✓' : '—'}</td>
-    <td>
-      <button class="action-btn" onclick='editPrest(${JSON.stringify(p)})'>Modifier</button>
-      <button class="action-btn red" onclick="togglePrest(${p.id}, ${p.actif})">${p.actif ? 'Désactiver' : 'Activer'}</button>
-    </td>
-  </tr>`).join('');
+  allPrestations = data || [];
+  updateCategorieDatalists(allPrestations);
+  const container = document.getElementById('prest-groups');
+  if (allPrestations.length === 0) { container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--taupe);">Aucune prestation.</div>'; return; }
+
+  // Groupe par catégorie puis sous-catégorie, en gardant l'ordre d'apparition (= ordre du catalogue)
+  const groups = [];
+  const groupIdx = {};
+  for (const p of allPrestations) {
+    const cat = p.categorie || 'Autre';
+    const sub = p.sous_categorie || '';
+    if (!(cat in groupIdx)) { groupIdx[cat] = { cat, subs: [], subIdx: {} }; groups.push(groupIdx[cat]); }
+    const g = groupIdx[cat];
+    if (!(sub in g.subIdx)) { g.subIdx[sub] = { sub, items: [] }; g.subs.push(g.subIdx[sub]); }
+    g.subIdx[sub].items.push(p);
+  }
+
+  container.innerHTML = groups.map(g => {
+    const total = g.subs.reduce((n, s) => n + s.items.length, 0);
+    const subsHtml = g.subs.map(s => {
+      const rows = s.items.map(p => `<tr>
+        <td>${p.nom}</td><td>${p.prix} €</td><td>${formatDur(p.duree_min)}</td>
+        <td>${p.actif ? '✓' : '—'}</td>
+        <td>
+          <button class="action-btn" onclick='editPrest(${JSON.stringify(p)})'>Modifier</button>
+          <button class="action-btn red" onclick="togglePrest(${p.id}, ${p.actif})">${p.actif ? 'Désactiver' : 'Activer'}</button>
+        </td>
+      </tr>`).join('');
+      const subLabel = s.sub ? `<div style="padding:8px 14px;font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--taupe-dark);background:var(--cream);border-top:1px solid var(--beige);">${s.sub}</div>` : '';
+      return `${subLabel}<table><tbody>${rows}</tbody></table>`;
+    }).join('');
+    return `<details class="table-wrap" style="margin-bottom:12px;">
+      <summary style="padding:14px 16px;cursor:pointer;font-weight:600;background:var(--beige);display:flex;justify-content:space-between;align-items:center;">
+        <span>${g.cat}</span><span style="font-size:.75rem;color:var(--taupe-dark);font-weight:400;">${total} prestation${total > 1 ? 's' : ''}</span>
+      </summary>
+      ${subsHtml}
+    </details>`;
+  }).join('');
+}
+
+function updateCategorieDatalists(list) {
+  const cats = [...new Set(list.map(p => p.categorie).filter(Boolean))];
+  const subs = [...new Set(list.map(p => p.sous_categorie).filter(Boolean))];
+  document.getElementById('pf-categorie-list').innerHTML = cats.map(c => `<option value="${c}">`).join('');
+  document.getElementById('pf-sous-categorie-list').innerHTML = subs.map(s => `<option value="${s}">`).join('');
 }
 
 function editPrest(p) {
   editPrestId = p.id;
   document.getElementById('pf-nom').value = p.nom;
+  document.getElementById('pf-categorie').value = p.categorie || '';
+  document.getElementById('pf-sous-categorie').value = p.sous_categorie || '';
   document.getElementById('pf-prix').value = p.prix;
   document.getElementById('pf-dur').value = p.duree_min;
   document.getElementById('prest-form-title').textContent = 'Modifier la prestation';
@@ -1489,6 +1551,8 @@ function editPrest(p) {
 function resetPrestForm() {
   editPrestId = null;
   document.getElementById('pf-nom').value = '';
+  document.getElementById('pf-categorie').value = '';
+  document.getElementById('pf-sous-categorie').value = '';
   document.getElementById('pf-prix').value = '';
   document.getElementById('pf-dur').value = '';
   document.getElementById('prest-form-title').textContent = 'Ajouter une prestation';
@@ -1496,12 +1560,14 @@ function resetPrestForm() {
 
 async function savePrest() {
   const nom = document.getElementById('pf-nom').value.trim();
+  const categorie = document.getElementById('pf-categorie').value.trim() || null;
+  const sous_categorie = document.getElementById('pf-sous-categorie').value.trim() || null;
   const prix = parseFloat(document.getElementById('pf-prix').value);
   const duree_min = parseInt(document.getElementById('pf-dur').value);
   if (!nom || !prix || !duree_min) { showMsg('prest-msg', 'Tous les champs sont requis.', false); return; }
   if (editPrestId) {
     await dbCall('prestations', 'update', {
-      payload: { nom, prix, duree_min },
+      payload: { nom, prix, duree_min, categorie, sous_categorie },
       filters: [{ col: 'id', op: 'eq', value: editPrestId }]
     });
   } else {
@@ -1511,7 +1577,7 @@ async function savePrest() {
     });
     const ordre = max?.[0]?.ordre + 1 || 1;
     await dbCall('prestations', 'insert', {
-      payload: { nom, prix, duree_min, actif: true, ordre }
+      payload: { nom, prix, duree_min, actif: true, ordre, categorie, sous_categorie }
     });
   }
   showMsg('prest-msg', 'Prestation enregistrée !', true);
