@@ -1,5 +1,6 @@
 const { getDb } = require('./lib/turso');
 
+// Tables autorisées et leurs colonnes (anti-injection : rien d'autre n'est accepté)
 const TABLES = {
   reservations: ['id','prenom','nom','telephone','email','message','prestation_nom','date','heure','duree_min','prix','acompte','statut','acompte_rembourse','acompte_paye','payment_method','payment_id','created_at'],
   prestations: ['id','nom','prix','duree_min','actif','ordre'],
@@ -106,7 +107,9 @@ exports.handler = async function (event) {
     return json({ error: 'Action inconnue : ' + action }, 400);
   } catch (err) {
     console.error('Erreur db.js:', err);
-    return json({ error: err.message }, 500);
+    // DEBUG TEMPORAIRE : renvoie le détail complet de l'erreur pour contourner
+    // l'indisponibilité des logs Netlify. A retirer une fois le bug corrigé.
+    return json({ error: err.message, errorName: err.name, errorStack: err.stack }, 500);
   }
 };
 
