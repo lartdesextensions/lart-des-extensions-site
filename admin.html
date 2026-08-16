@@ -817,6 +817,9 @@ async function saveNewRdv() {
     } catch (err) {
       alert('Le RDV est bien enregistré, mais l\'email de confirmation n\'a pas pu être envoyé :\n' + err.message);
     }
+  } else {
+    // DEBUG TEMPORAIRE : à retirer une fois le problème identifié
+    alert('DEBUG — email non envoyé.\nnewReservationId = ' + JSON.stringify(newReservationId) + '\nemail = "' + email + '"\neditingRdvId = ' + JSON.stringify(editingRdvId));
   }
 
   closeNewRdvModal();
