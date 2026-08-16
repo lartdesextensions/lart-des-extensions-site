@@ -388,6 +388,7 @@ tr:hover td{background:var(--cream);}
       <div class="field"><label>Téléphone</label><input type="tel" id="nr-tel" placeholder="06 12 34 56 78"></div>
       <div class="field"><label>Acompte (€)</label><input type="number" id="nr-acompte" placeholder="0"></div>
     </div>
+    <div class="field" style="margin-bottom:14px;"><label>Email (optionnel, pour envoyer la confirmation)</label><input type="email" id="nr-email" placeholder="cliente@email.com"></div>
     <div id="nr-msg" style="font-size:.78rem;margin-top:8px;"></div>
     <div class="modal-actions">
       <button class="btn" onclick="saveNewRdv()">Enregistrer</button>
@@ -582,7 +583,6 @@ let editingRdvId = null;
 async function ensureNrPrestationsLoaded() {
   if (nrPrestations.length > 0) return;
   const { data } = await dbCall('prestations', 'select', {
-    filters: [{ col: 'actif', op: 'eq', value: true }],
     order: [{ col: 'ordre' }]
   });
   nrPrestations = data || [];
@@ -605,6 +605,7 @@ async function openNewRdvModal() {
   document.getElementById('nr-nom').value = '';
   document.getElementById('nr-tel').value = '';
   document.getElementById('nr-acompte').value = '';
+  document.getElementById('nr-email').value = '';
   document.getElementById('nr-nom-libre').value = '';
   document.getElementById('nr-custom-row').style.display = 'none';
   document.getElementById('nr-msg').textContent = '';
@@ -636,6 +637,7 @@ async function openEditRdvModal() {
   document.getElementById('nr-nom').value = currentRdv.nom || '';
   document.getElementById('nr-tel').value = currentRdv.telephone || '';
   document.getElementById('nr-acompte').value = currentRdv.acompte || '';
+  document.getElementById('nr-email').value = currentRdv.email || '';
   document.getElementById('nr-add-prestation').value = '';
   document.getElementById('nr-supp-nom').value = '';
   document.getElementById('nr-supp-prix').value = '';
@@ -733,6 +735,7 @@ async function saveNewRdv() {
   const prenom = document.getElementById('nr-prenom').value.trim();
   const nom = document.getElementById('nr-nom').value.trim();
   const tel = document.getElementById('nr-tel').value.trim();
+  const email = document.getElementById('nr-email').value.trim();
   const prix = Number(document.getElementById('nr-prix').value) || 0;
   const duree = Number(document.getElementById('nr-duree').value) || 30;
   const acompte = Number(document.getElementById('nr-acompte').value) || 0;
@@ -752,11 +755,12 @@ async function saveNewRdv() {
   }
 
   const payload = {
-    prenom, nom, telephone: tel,
+    prenom, nom, telephone: tel, email,
     prestation_nom: prestationNom,
     date, heure, duree_min: duree, prix, acompte
   };
 
+  let newReservationId = null;
   try {
     if (editingRdvId) {
       await dbCall('reservations', 'update', {
@@ -764,14 +768,23 @@ async function saveNewRdv() {
         filters: [{ col: 'id', op: 'eq', value: editingRdvId }]
       });
     } else {
-      await dbCall('reservations', 'insert', {
-        payload: { ...payload, email: '', message: '', statut: 'confirme' }
+      const { data } = await dbCall('reservations', 'insert', {
+        payload: { ...payload, message: '', statut: 'confirme' }
       });
+      newReservationId = data && data.id;
     }
   } catch (err) {
     msg.style.color = 'var(--error)';
     msg.textContent = 'Erreur : ' + err.message;
     return;
+  }
+
+  if (newReservationId && email) {
+    fetch('/.netlify/functions/send-confirmation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reservationId: newReservationId })
+    }).catch(err => console.error('Erreur envoi confirmation:', err));
   }
 
   closeNewRdvModal();
