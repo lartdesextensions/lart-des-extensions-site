@@ -7,6 +7,7 @@ const TABLES = {
   disponibilites: ['id','date','ferme','heure_debut','heure_fin'],
   indisponibilites: ['id','date','heure_debut','heure_fin','motif'],
   clients_bloques: ['id','email','telephone','raison','created_at'],
+  clients: ['id','prenom','nom','telephone','email','notes','created_at','updated_at'],
   settings: ['key','value']
 };
 
