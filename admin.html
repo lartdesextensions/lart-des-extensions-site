@@ -52,6 +52,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:28px;}
 @media(max-width:600px){.stats{grid-template-columns:1fr 1fr;}}
 .stat-card{background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;padding:18px;}
+.dash-tab.active{background:var(--white);color:var(--dark);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08);}
 .stat-num{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:400;line-height:1;}
 .stat-label{font-size:.72rem;color:var(--taupe-dark);margin-top:4px;}
 
@@ -189,12 +190,42 @@ tr:hover td{background:var(--cream);}
     <!-- DASHBOARD -->
     <div class="section active" id="sec-dashboard">
       <div class="content-title">Vue d'ensemble</div>
-      <div class="content-sub">Aujourd'hui — <span id="dash-today"></span></div>
-      <div class="stats">
-        <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-label">Rdv aujourd'hui</div></div>
-        <div class="stat-card"><div class="stat-num" id="stat-week">—</div><div class="stat-label">Rdv cette semaine</div></div>
-        <div class="stat-card"><div class="stat-num" id="stat-pending">—</div><div class="stat-label">En attente</div></div>
+      <div class="content-sub" id="dash-period-sub">Aujourd'hui — <span id="dash-today"></span></div>
+
+      <div style="display:flex;gap:6px;background:var(--beige);border-radius:10px;padding:4px;margin-bottom:20px;">
+        <div class="dash-tab active" data-p="jour" onclick="setDashPeriod('jour')" style="flex:1;text-align:center;padding:9px 4px;border-radius:8px;font-size:.82rem;cursor:pointer;color:var(--taupe-dark);">Jour</div>
+        <div class="dash-tab" data-p="semaine" onclick="setDashPeriod('semaine')" style="flex:1;text-align:center;padding:9px 4px;border-radius:8px;font-size:.82rem;cursor:pointer;color:var(--taupe-dark);">Semaine</div>
+        <div class="dash-tab" data-p="mois" onclick="setDashPeriod('mois')" style="flex:1;text-align:center;padding:9px 4px;border-radius:8px;font-size:.82rem;cursor:pointer;color:var(--taupe-dark);">Mois</div>
+        <div class="dash-tab" data-p="annee" onclick="setDashPeriod('annee')" style="flex:1;text-align:center;padding:9px 4px;border-radius:8px;font-size:.82rem;cursor:pointer;color:var(--taupe-dark);">Année</div>
       </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+        <button class="cal-nav-btn" onclick="dashShift(-1)">‹ Précédent</button>
+        <span style="font-family:'Cormorant Garamond',serif;font-size:1.1rem;" id="dash-nav-label"></span>
+        <button class="cal-nav-btn" onclick="dashShift(1)">Suivant ›</button>
+      </div>
+
+      <div class="stats">
+        <div class="stat-card"><div class="stat-num" id="dash-rdv">—</div><div class="stat-label">Rendez-vous</div></div>
+        <div class="stat-card"><div class="stat-num" id="dash-ca">—</div><div class="stat-label">Chiffre d'affaires</div></div>
+        <div class="stat-card"><div class="stat-num" id="dash-acompte">—</div><div class="stat-label">Total acomptes encaissés</div></div>
+        <div class="stat-card"><div class="stat-num" id="dash-reste">—</div><div class="stat-label">Reste à encaisser au salon</div></div>
+        <div class="stat-card"><div class="stat-num" id="dash-panier">—</div><div class="stat-label">Panier moyen par rendez-vous</div></div>
+        <div class="stat-card"><div class="stat-num" id="dash-pending">—</div><div class="stat-label">En attente sur la période</div></div>
+      </div>
+
+      <div class="content-title" style="font-size:1.1rem;margin-bottom:12px;">Prestations les plus vendues (période sélectionnée)</div>
+      <div class="table-wrap" style="margin-bottom:28px;">
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+          <thead style="background:var(--beige);"><tr>
+            <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Prestation</th>
+            <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Nb</th>
+            <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">CA</th>
+          </tr></thead>
+          <tbody id="dash-top-prest"><tr><td colspan="3" style="padding:16px 14px;color:var(--taupe);">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+
       <div class="content-title" style="font-size:1.1rem;margin-bottom:12px;">Prochains rendez-vous</div>
       <div class="table-wrap"><div id="upcoming-list"><div style="padding:20px;color:var(--taupe);font-size:.85rem;">Chargement...</div></div></div>
     </div>
@@ -586,23 +617,96 @@ async function initApp() {
 }
 
 // ── DASHBOARD ──
+let dashPeriod = 'jour';
+let dashDate = new Date();
+let dashAllRdvs = null;
+
+function setDashPeriod(p) {
+  dashPeriod = p;
+  document.querySelectorAll('.dash-tab').forEach(t => t.classList.toggle('active', t.dataset.p === p));
+  renderDashboardStats();
+}
+
+function dashShift(dir) {
+  const d = new Date(dashDate);
+  if (dashPeriod === 'jour') d.setDate(d.getDate() + dir);
+  else if (dashPeriod === 'semaine') d.setDate(d.getDate() + dir * 7);
+  else if (dashPeriod === 'mois') d.setMonth(d.getMonth() + dir);
+  else if (dashPeriod === 'annee') d.setFullYear(d.getFullYear() + dir);
+  dashDate = d;
+  renderDashboardStats();
+}
+
+function computeDashRange() {
+  const d = new Date(dashDate);
+  if (dashPeriod === 'jour') {
+    const s = fmtDate(d);
+    return { start: s, end: s, label: fmtDateFR(s), sub: d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) };
+  }
+  if (dashPeriod === 'semaine') {
+    const s = startOfWeek(new Date(d));
+    const e = endOfWeek(new Date(d));
+    const sStr = fmtDate(s), eStr = fmtDate(e);
+    return { start: sStr, end: eStr, label: 'Semaine du ' + fmtDateFR(sStr).split(' ')[0] + ' au ' + fmtDateFR(eStr), sub: 'Du ' + fmtDateFR(sStr) + ' au ' + fmtDateFR(eStr) };
+  }
+  if (dashPeriod === 'mois') {
+    const y = d.getFullYear(), m = d.getMonth();
+    const s = `${y}-${String(m+1).padStart(2,'0')}-01`;
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const e = `${y}-${String(m+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+    return { start: s, end: e, label: MONTHS[m] + ' ' + y, sub: 'Du 1er au ' + lastDay + ' ' + MONTHS[m].toLowerCase() + ' ' + y };
+  }
+  // annee
+  const y = d.getFullYear();
+  return { start: `${y}-01-01`, end: `${y}-12-31`, label: String(y), sub: 'Du 1er janvier au 31 décembre ' + y };
+}
+
+async function renderDashboardStats() {
+  if (!dashAllRdvs) return;
+  const range = computeDashRange();
+  document.getElementById('dash-nav-label').textContent = range.label;
+  document.getElementById('dash-period-sub').innerHTML = dashPeriod === 'jour'
+    ? `Aujourd'hui — <span id="dash-today">${range.sub}</span>`
+    : range.sub;
+
+  const inRange = dashAllRdvs.filter(r => r.date >= range.start && r.date <= range.end);
+  const ca = inRange.reduce((s, r) => s + (r.prix || 0), 0);
+  const acompte = inRange.reduce((s, r) => s + (r.acompte || 0), 0);
+  const pending = inRange.filter(r => r.statut === 'en_attente').length;
+
+  document.getElementById('dash-rdv').textContent = inRange.length;
+  document.getElementById('dash-ca').textContent = ca.toLocaleString('fr-FR') + ' €';
+  document.getElementById('dash-acompte').textContent = acompte.toLocaleString('fr-FR') + ' €';
+  document.getElementById('dash-reste').textContent = (ca - acompte).toLocaleString('fr-FR') + ' €';
+  document.getElementById('dash-panier').textContent = inRange.length ? Math.round(ca / inRange.length).toLocaleString('fr-FR') + ' €' : '0 €';
+  document.getElementById('dash-pending').textContent = pending;
+
+  const byPrest = {};
+  inRange.forEach(r => {
+    const key = r.prestation_nom || 'Autre';
+    if (!byPrest[key]) byPrest[key] = { nb: 0, ca: 0 };
+    byPrest[key].nb++;
+    byPrest[key].ca += r.prix || 0;
+  });
+  const top = Object.entries(byPrest).sort((a, b) => b[1].ca - a[1].ca).slice(0, 8);
+  const tbody = document.getElementById('dash-top-prest');
+  if (top.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" style="padding:16px 14px;color:var(--taupe);text-align:center;">Aucune prestation sur cette période.</td></tr>';
+  } else {
+    tbody.innerHTML = top.map(([nom, v]) => `<tr style="border-top:1px solid var(--beige);"><td style="padding:10px 14px;">${nom}</td><td style="padding:10px 14px;">${v.nb}</td><td style="padding:10px 14px;">${v.ca.toLocaleString('fr-FR')} €</td></tr>`).join('');
+  }
+}
+
 async function loadDashboard() {
   const today = fmtDate(new Date());
-  const [y, m] = today.split('-').map(Number);
-  const weekStart = fmtDate(startOfWeek(new Date()));
-  const weekEnd = fmtDate(endOfWeek(new Date()));
 
   const { data: rdvs } = await dbCall('reservations', 'select', {
     filters: [{ col: 'statut', op: 'neq', value: 'annule' }],
     order: [{ col: 'date' }, { col: 'heure' }]
   });
   if (!rdvs) return;
-  const todayRdv = rdvs.filter(r => r.date === today);
-  const weekRdv = rdvs.filter(r => r.date >= weekStart && r.date <= weekEnd);
-  const pending = rdvs.filter(r => r.statut === 'en_attente');
-  document.getElementById('stat-today').textContent = todayRdv.length;
-  document.getElementById('stat-week').textContent = weekRdv.length;
-  document.getElementById('stat-pending').textContent = pending.length;
+  dashAllRdvs = rdvs;
+  await renderDashboardStats();
 
   const upcoming = rdvs.filter(r => r.date >= today).slice(0, 10);
   const tbody = document.getElementById('upcoming-list');
