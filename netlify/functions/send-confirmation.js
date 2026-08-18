@@ -25,7 +25,26 @@ exports.handler = async function (event) {
       return json({ error: 'Cette réservation n\'a pas d\'email renseigné' }, 400);
     }
 
-    const result = await sendClientConfirmationEmail(reservation);
+    // Si ce RDV fait partie d'un groupe (plusieurs prestations le même jour),
+    // on agrège les infos pour un seul email récapitulatif
+    let toSend = reservation;
+    if (reservation.groupe_id) {
+      const groupRes = await db.execute({
+        sql: 'SELECT * FROM reservations WHERE groupe_id = ? ORDER BY heure',
+        args: [reservation.groupe_id]
+      });
+      const rows = groupRes.rows;
+      if (rows.length > 1) {
+        toSend = {
+          ...reservation,
+          prestation_nom: rows.map(r => r.prestation_nom).join(' + '),
+          prix: rows.reduce((s, r) => s + (r.prix || 0), 0),
+          acompte: rows.reduce((s, r) => s + (r.acompte || 0), 0)
+        };
+      }
+    }
+
+    const result = await sendClientConfirmationEmail(toSend);
     if (!result.ok) {
       return json({ error: result.error || 'Échec de l\'envoi de l\'email' }, 500);
     }
@@ -44,3 +63,4 @@ function json(obj, statusCode = 200) {
     body: JSON.stringify(obj)
   };
 }
+
