@@ -78,6 +78,22 @@ tr:hover td{background:var(--cream);}
 #prest-groups details[open] summary::before{transform:rotate(90deg);}
 #prest-groups table{border-top:1px solid var(--beige);}
 
+/* SELECTEUR DE PRESTATION PAR CATEGORIES (modal, 3 niveaux) */
+.picker-cat{margin-bottom:8px;border:1px solid var(--beige-mid);border-radius:8px;overflow:hidden;}
+.picker-cat > summary{list-style:none;padding:13px 14px;cursor:pointer;font-weight:600;font-size:.9rem;background:var(--taupe-dark);color:var(--white);}
+.picker-cat > summary::-webkit-details-marker{display:none;}
+.picker-cat > summary::before{content:'▸';display:inline-block;margin-right:8px;transition:transform .15s;}
+.picker-cat[open] > summary::before{transform:rotate(90deg);}
+.picker-cat-body{padding:8px;background:var(--white);}
+.picker-sub{margin-bottom:6px;border:1px solid var(--beige-mid);border-radius:7px;overflow:hidden;}
+.picker-sub > summary{list-style:none;padding:11px 12px;cursor:pointer;font-weight:500;font-size:.85rem;background:var(--beige);}
+.picker-sub > summary::-webkit-details-marker{display:none;}
+.picker-sub > summary::before{content:'▸';display:inline-block;margin-right:8px;font-size:.8rem;transition:transform .15s;}
+.picker-sub[open] > summary::before{transform:rotate(90deg);}
+.picker-item{padding:10px 16px;border-top:1px solid var(--beige-mid);cursor:pointer;font-size:.82rem;display:flex;justify-content:space-between;gap:10px;background:var(--white);}
+.picker-item:active{background:var(--beige);}
+.picker-count{font-weight:400;color:var(--taupe-dark);font-size:.72rem;}
+
 /* CALENDAR ADMIN */
 .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
 .cal-title{font-family:'Cormorant Garamond',serif;font-size:1.2rem;}
@@ -346,6 +362,16 @@ tr:hover td{background:var(--cream);}
 </div>
 </div>
 
+<!-- MODAL SELECTEUR DE PRESTATION PAR CATEGORIES -->
+<div class="modal-bg" id="modal-prestation-picker">
+  <div class="modal" style="max-height:82vh;display:flex;flex-direction:column;">
+    <div class="modal-title">Choisir une prestation</div>
+    <div onclick="selectPickerItem('autre')" style="padding:12px 14px;border:1px dashed var(--beige-mid);border-radius:8px;cursor:pointer;font-size:.85rem;margin-bottom:12px;background:var(--cream);">Autre (saisie libre)</div>
+    <div id="picker-categories" style="overflow-y:auto;flex:1;"></div>
+    <button class="btn btn-outline" style="margin-top:14px;" onclick="closePrestationPicker()">Fermer</button>
+  </div>
+</div>
+
 <!-- MODAL NOUVEAU RDV / MODIFIER RDV -->
 <div class="modal-bg" id="modal-new-rdv">
   <div class="modal">
@@ -356,10 +382,11 @@ tr:hover td{background:var(--cream);}
     </div>
     <div class="field" style="margin-bottom:14px;">
       <label>Prestation</label>
-      <select id="nr-prestation" onchange="onNrPrestationChange()" style="width:100%;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;">
+      <select id="nr-prestation" onchange="onNrPrestationChange()" style="display:none;">
         <option value="">— Choisir une prestation —</option>
         <option value="autre">Autre (saisie libre)</option>
       </select>
+      <button type="button" id="nr-prestation-btn" onclick="openPrestationPicker('primary')" style="width:100%;text-align:left;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;background:var(--white);cursor:pointer;">— Choisir une prestation —</button>
     </div>
     <div class="field-row" id="nr-custom-row" style="display:none;">
       <div class="field"><label>Nom de la prestation</label><input type="text" id="nr-nom-libre" placeholder="Ex: Retouche"></div>
@@ -368,25 +395,27 @@ tr:hover td{background:var(--cream);}
       <div class="field"><label>Prix (€)</label><input type="number" id="nr-prix"></div>
       <div class="field"><label>Durée (min)</label><input type="number" id="nr-duree"></div>
     </div>
-    <div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:14px;">
-      <div class="field" style="flex:1;">
+    <div id="nr-multi-section">
+      <div id="nr-extra-list"></div>
+      <div class="field" style="margin-bottom:14px;">
         <label>+ Ajouter une autre prestation à ce rdv</label>
-        <select id="nr-add-prestation" style="width:100%;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;">
+        <select id="nr-add-prestation" style="display:none;">
           <option value="">— Choisir —</option>
         </select>
+        <button type="button" onclick="openPrestationPicker('extra')" style="width:100%;text-align:left;padding:11px 14px;border:1px dashed var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;background:var(--cream);cursor:pointer;">+ Choisir une prestation à ajouter</button>
       </div>
-      <button class="btn btn-outline" style="width:auto;padding:11px 16px;" onclick="addExtraPrestation()">Ajouter</button>
-    </div>
-    <div style="border-top:1px dashed var(--beige-mid);padding-top:14px;margin-bottom:14px;">
-      <label style="display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:6px;">+ Ajouter un supplément à ce rdv</label>
-      <div class="field-row">
-        <div class="field"><label>Nom du supplément</label><input type="text" id="nr-supp-nom" placeholder="Ex : Supplément shampoing"></div>
-        <div class="field"><label>Prix (€)</label><input type="number" id="nr-supp-prix" placeholder="15"></div>
+      <div style="border-top:1px dashed var(--beige-mid);padding-top:14px;margin-bottom:14px;">
+        <label style="display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:6px;">+ Ajouter un supplément à ce rdv</label>
+        <div class="field-row">
+          <div class="field"><label>Nom du supplément</label><input type="text" id="nr-supp-nom" placeholder="Ex : Supplément shampoing"></div>
+          <div class="field"><label>Prix (€)</label><input type="number" id="nr-supp-prix" placeholder="15"></div>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:8px;">
+          <div class="field" style="flex:1;"><label>Durée (min)</label><input type="number" id="nr-supp-duree" placeholder="15"></div>
+          <button class="btn btn-outline" style="width:auto;padding:11px 16px;" onclick="addSupplementToRdv()">Ajouter</button>
+        </div>
       </div>
-      <div style="display:flex;align-items:flex-end;gap:8px;">
-        <div class="field" style="flex:1;"><label>Durée (min)</label><input type="number" id="nr-supp-duree" placeholder="15"></div>
-        <button class="btn btn-outline" style="width:auto;padding:11px 16px;" onclick="addSupplementToRdv()">Ajouter</button>
-      </div>
+      <div id="nr-total-summary" style="font-size:.8rem;color:var(--taupe-dark);margin-bottom:14px;"></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Prénom</label><input type="text" id="nr-prenom" placeholder="Marie"></div>
@@ -635,10 +664,14 @@ async function openNewRdvModal() {
 
   await ensureNrPrestationsLoaded();
   document.getElementById('nr-prestation').value = '';
+  updatePrimaryPickerButtonLabel();
   document.getElementById('nr-add-prestation').value = '';
   document.getElementById('nr-supp-nom').value = '';
   document.getElementById('nr-supp-prix').value = '';
   document.getElementById('nr-supp-duree').value = '';
+  nrExtraServices = [];
+  document.getElementById('nr-multi-section').style.display = '';
+  renderExtraServicesList();
   document.getElementById('modal-new-rdv').classList.add('open');
 }
 
@@ -652,6 +685,7 @@ async function openEditRdvModal() {
   document.getElementById('nr-date').value = currentRdv.date;
   document.getElementById('nr-heure').value = currentRdv.heure;
   document.getElementById('nr-prestation').value = 'autre';
+  updatePrimaryPickerButtonLabel();
   document.getElementById('nr-custom-row').style.display = 'grid';
   document.getElementById('nr-nom-libre').value = currentRdv.prestation_nom || '';
   document.getElementById('nr-prix').value = currentRdv.prix || '';
@@ -665,6 +699,8 @@ async function openEditRdvModal() {
   document.getElementById('nr-supp-nom').value = '';
   document.getElementById('nr-supp-prix').value = '';
   document.getElementById('nr-supp-duree').value = '';
+  nrExtraServices = [];
+  document.getElementById('nr-multi-section').style.display = 'none';
   document.getElementById('nr-msg').textContent = '';
 
   document.getElementById('modal-new-rdv').classList.add('open');
@@ -691,34 +727,104 @@ function onNrPrestationChange() {
   } else {
     customRow.style.display = 'none';
   }
+  updateNrTotalSummary();
 }
 
-function addExtraPrestation() {
-  const addSel = document.getElementById('nr-add-prestation');
-  if (addSel.value === '') return;
-  const extra = nrPrestations[Number(addSel.value)];
-  if (!extra) return;
+let nrExtraServices = [];
 
+function primaryServiceFromForm() {
   const sel = document.getElementById('nr-prestation');
-  let currentName = '';
+  let nom = '';
   if (sel.value === 'autre') {
-    currentName = document.getElementById('nr-nom-libre').value.trim();
+    nom = document.getElementById('nr-nom-libre').value.trim();
   } else if (sel.value !== '') {
-    currentName = nrPrestations[Number(sel.value)].nom;
+    nom = nrPrestations[Number(sel.value)].nom;
   }
+  return {
+    nom,
+    prix: Number(document.getElementById('nr-prix').value) || 0,
+    duree_min: Number(document.getElementById('nr-duree').value) || 0
+  };
+}
 
-  sel.value = 'autre';
-  document.getElementById('nr-custom-row').style.display = 'grid';
-  document.getElementById('nr-nom-libre').value = currentName ? `${currentName} + ${extra.nom}` : extra.nom;
+let pickerTarget = null;
 
-  const currentPrix = Number(document.getElementById('nr-prix').value) || 0;
-  const currentDuree = Number(document.getElementById('nr-duree').value) || 0;
-  const newPrix = currentPrix + extra.prix;
-  document.getElementById('nr-prix').value = newPrix;
-  document.getElementById('nr-duree').value = currentDuree + extra.duree_min;
-  document.getElementById('nr-acompte').value = Math.round(newPrix * 0.35);
+function openPrestationPicker(target) {
+  pickerTarget = target;
+  renderPickerCategories();
+  document.getElementById('modal-prestation-picker').classList.add('open');
+}
 
-  addSel.value = '';
+function closePrestationPicker() {
+  document.getElementById('modal-prestation-picker').classList.remove('open');
+}
+
+function groupPrestationsByCategory(list) {
+  const groups = [];
+  const catIdx = {};
+  list.forEach((p, i) => {
+    const catLabel = p.categorie || 'Autre';
+    if (!(catLabel in catIdx)) { catIdx[catLabel] = { label: catLabel, subs: [], subIdx: {} }; groups.push(catIdx[catLabel]); }
+    const cat = catIdx[catLabel];
+    const subLabel = p.sous_categorie || '';
+    if (!(subLabel in cat.subIdx)) { cat.subIdx[subLabel] = { label: subLabel, items: [] }; cat.subs.push(cat.subIdx[subLabel]); }
+    cat.subIdx[subLabel].items.push({ p, i });
+  });
+  return groups;
+}
+
+function renderPickerCategories() {
+  const groups = groupPrestationsByCategory(nrPrestations);
+  document.getElementById('picker-categories').innerHTML = groups.map(g => {
+    const subsHtml = g.subs.map(s => {
+      const itemsHtml = s.items.map(({ p, i }) => {
+        let label = p.nom;
+        if (s.label) label = label.replace(s.label + ' - ', '').replace(s.label + ' – ', '');
+        return `<div class="picker-item" onclick="selectPickerItem(${i})">
+          <span>${label}</span>
+          <span style="color:var(--taupe-dark);white-space:nowrap;">${p.prix} €</span>
+        </div>`;
+      }).join('');
+      if (!s.label) return itemsHtml;
+      return `<details class="picker-sub">
+        <summary>${s.label} <span class="picker-count">(${s.items.length})</span></summary>
+        <div>${itemsHtml}</div>
+      </details>`;
+    }).join('');
+    return `<details class="picker-cat">
+      <summary>${g.label}</summary>
+      <div class="picker-cat-body">${subsHtml}</div>
+    </details>`;
+  }).join('');
+}
+
+function selectPickerItem(i) {
+  if (pickerTarget === 'primary') {
+    document.getElementById('nr-prestation').value = i;
+    onNrPrestationChange();
+    updatePrimaryPickerButtonLabel();
+  } else if (pickerTarget === 'extra') {
+    if (i === 'autre') { closePrestationPicker(); return; }
+    const extra = nrPrestations[i];
+    if (extra) {
+      nrExtraServices.push({ nom: extra.nom, prix: extra.prix, duree_min: extra.duree_min });
+      renderExtraServicesList();
+    }
+  }
+  closePrestationPicker();
+}
+
+function updatePrimaryPickerButtonLabel() {
+  const val = document.getElementById('nr-prestation').value;
+  const btn = document.getElementById('nr-prestation-btn');
+  if (val === 'autre') {
+    btn.textContent = 'Autre (saisie libre)';
+  } else if (val !== '') {
+    const p = nrPrestations[Number(val)];
+    btn.textContent = p ? `${p.nom} — ${p.prix} €` : '— Choisir une prestation —';
+  } else {
+    btn.textContent = '— Choisir une prestation —';
+  }
 }
 
 function addSupplementToRdv() {
@@ -726,76 +832,106 @@ function addSupplementToRdv() {
   const prixSupp = Number(document.getElementById('nr-supp-prix').value) || 0;
   const dureeSupp = Number(document.getElementById('nr-supp-duree').value) || 0;
   if (!nomSupp) return;
-
-  const sel = document.getElementById('nr-prestation');
-  let currentName = '';
-  if (sel.value === 'autre') {
-    currentName = document.getElementById('nr-nom-libre').value.trim();
-  } else if (sel.value !== '') {
-    currentName = nrPrestations[Number(sel.value)].nom;
-  }
-
-  sel.value = 'autre';
-  document.getElementById('nr-custom-row').style.display = 'grid';
-  document.getElementById('nr-nom-libre').value = currentName ? `${currentName} + ${nomSupp}` : nomSupp;
-
-  const currentPrix = Number(document.getElementById('nr-prix').value) || 0;
-  const currentDuree = Number(document.getElementById('nr-duree').value) || 0;
-  const newPrix = currentPrix + prixSupp;
-  document.getElementById('nr-prix').value = newPrix;
-  document.getElementById('nr-duree').value = currentDuree + dureeSupp;
-  document.getElementById('nr-acompte').value = Math.round(newPrix * 0.35);
-
+  nrExtraServices.push({ nom: nomSupp, prix: prixSupp, duree_min: dureeSupp });
   document.getElementById('nr-supp-nom').value = '';
   document.getElementById('nr-supp-prix').value = '';
   document.getElementById('nr-supp-duree').value = '';
+  renderExtraServicesList();
+}
+
+function removeExtraService(i) {
+  nrExtraServices.splice(i, 1);
+  renderExtraServicesList();
+}
+
+function renderExtraServicesList() {
+  const container = document.getElementById('nr-extra-list');
+  if (nrExtraServices.length === 0) {
+    container.innerHTML = '';
+  } else {
+    container.innerHTML = '<label style="display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:6px;">Prestations ajoutées à ce rdv</label>' +
+      nrExtraServices.map((s, i) => `
+        <div style="display:flex;align-items:center;gap:10px;background:var(--cream);border:1px solid var(--beige-mid);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
+          <div style="width:10px;height:10px;border-radius:50%;background:${getPrestationColor(s.nom)};flex-shrink:0;"></div>
+          <div style="flex:1;font-size:.85rem;">${s.nom} — ${s.prix} € · ${formatDur(s.duree_min)}</div>
+          <button type="button" onclick="removeExtraService(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:.9rem;">✕</button>
+        </div>`).join('');
+  }
+  updateNrTotalSummary();
+}
+
+function updateNrTotalSummary() {
+  const primary = primaryServiceFromForm();
+  const all = [primary, ...nrExtraServices].filter(s => s.nom);
+  const summary = document.getElementById('nr-total-summary');
+  if (all.length <= 1) { summary.textContent = ''; return; }
+  const totalPrix = all.reduce((s, x) => s + x.prix, 0);
+  const totalDuree = all.reduce((s, x) => s + x.duree_min, 0);
+  summary.innerHTML = `<strong>${all.length} prestations</strong> · Total : ${totalPrix} € · ${formatDur(totalDuree)} — chaque prestation apparaîtra séparément dans le planning, à la suite.`;
 }
 
 async function saveNewRdv() {
   const date = document.getElementById('nr-date').value;
   const heure = document.getElementById('nr-heure').value;
-  const val = document.getElementById('nr-prestation').value;
   const prenom = document.getElementById('nr-prenom').value.trim();
   const nom = document.getElementById('nr-nom').value.trim();
   const tel = document.getElementById('nr-tel').value.trim();
   const email = document.getElementById('nr-email').value.trim();
-  const prix = Number(document.getElementById('nr-prix').value) || 0;
-  const duree = Number(document.getElementById('nr-duree').value) || 30;
-  const acompte = Number(document.getElementById('nr-acompte').value) || 0;
+  const acompteTotal = Number(document.getElementById('nr-acompte').value) || 0;
   const msg = document.getElementById('nr-msg');
 
-  let prestationNom = '';
-  if (val === 'autre') {
-    prestationNom = document.getElementById('nr-nom-libre').value.trim();
-  } else if (val !== '') {
-    prestationNom = nrPrestations[Number(val)].nom;
-  }
+  const primary = primaryServiceFromForm();
+  const services = [primary, ...nrExtraServices].filter(s => s.nom);
 
-  if (!date || !heure || !prestationNom || !prenom || !nom) {
+  if (!date || !heure || services.length === 0 || !prenom || !nom) {
     msg.style.color = 'var(--error)';
     msg.textContent = 'Merci de remplir au minimum la date, l\'heure, la prestation, le prénom et le nom.';
     return;
   }
 
-  const payload = {
-    prenom, nom, telephone: tel, email,
-    prestation_nom: prestationNom,
-    date, heure, duree_min: duree, prix, acompte
-  };
-
   let newReservationId = null;
   try {
     if (editingRdvId) {
+      const payload = {
+        prenom, nom, telephone: tel, email,
+        prestation_nom: primary.nom,
+        date, heure, duree_min: primary.duree_min, prix: primary.prix, acompte: acompteTotal
+      };
       await dbCall('reservations', 'update', {
         payload,
         filters: [{ col: 'id', op: 'eq', value: editingRdvId }]
       });
-    } else {
+    } else if (services.length === 1) {
+      const payload = {
+        prenom, nom, telephone: tel, email,
+        prestation_nom: services[0].nom,
+        date, heure, duree_min: services[0].duree_min, prix: services[0].prix, acompte: acompteTotal
+      };
       const { data } = await dbCall('reservations', 'insert', {
         payload: { ...payload, message: '', statut: 'confirme' },
         single: true
       });
       newReservationId = data && data.id;
+    } else {
+      // Plusieurs prestations : une ligne par prestation, horaires calculés à la suite,
+      // reliées par un groupe_id pour le planning et l'email récapitulatif
+      const groupeId = 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      let cursorMin = timeToMin(heure);
+      for (let i = 0; i < services.length; i++) {
+        const s = services[i];
+        const hh = String(Math.floor(cursorMin / 60)).padStart(2, '0');
+        const mm = String(cursorMin % 60).padStart(2, '0');
+        const payload = {
+          prenom, nom, telephone: tel, email,
+          prestation_nom: s.nom,
+          date, heure: `${hh}:${mm}`, duree_min: s.duree_min, prix: s.prix,
+          acompte: i === 0 ? acompteTotal : 0,
+          message: '', statut: 'confirme', groupe_id: groupeId
+        };
+        const { data } = await dbCall('reservations', 'insert', { payload, single: true });
+        if (i === 0) newReservationId = data && data.id;
+        cursorMin += s.duree_min;
+      }
     }
   } catch (err) {
     msg.style.color = 'var(--error)';
@@ -817,9 +953,6 @@ async function saveNewRdv() {
     } catch (err) {
       alert('Le RDV est bien enregistré, mais l\'email de confirmation n\'a pas pu être envoyé :\n' + err.message);
     }
-  } else {
-    // DEBUG TEMPORAIRE : à retirer une fois le problème identifié
-    alert('DEBUG — email non envoyé.\nnewReservationId = ' + JSON.stringify(newReservationId) + '\nemail = "' + email + '"\neditingRdvId = ' + JSON.stringify(editingRdvId));
   }
 
   closeNewRdvModal();
@@ -877,6 +1010,8 @@ async function loadAgenda() {
   await fetchWeeklySettings();
   const dispo = (dispos || [])[0];
   agendaFerme = dispo ? dispo.ferme : isWeekdayClosed(dow);
+  agendaOpenStart = dispo?.heure_debut || weeklyHoursMap[`hours_${dow}_start`] || '09:00';
+  agendaOpenEnd = dispo?.heure_fin || weeklyHoursMap[`hours_${dow}_end`] || '17:00';
 
   const summary = document.getElementById('agenda-summary');
   const totalPrix = agendaData.reduce((s, r) => s + (r.prix || 0), 0);
@@ -894,11 +1029,20 @@ async function loadAgenda() {
   if (agendaData.length === 0) {
     document.getElementById('agenda-list').innerHTML = '<div style="padding:24px;text-align:center;color:var(--taupe);font-size:.85rem;background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;">Aucun rendez-vous ce jour.</div>';
   } else {
-    document.getElementById('agenda-list').innerHTML = agendaData.map(r => `
-      <div style="background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;gap:16px;cursor:pointer;" onclick='openModal(${JSON.stringify(r)})'>
+    const groupCounts = {};
+    agendaData.forEach(r => { if (r.groupe_id) groupCounts[r.groupe_id] = (groupCounts[r.groupe_id] || 0) + 1; });
+    const groupSeen = {};
+    document.getElementById('agenda-list').innerHTML = agendaData.map(r => {
+      let groupBadge = '';
+      if (r.groupe_id) {
+        groupSeen[r.groupe_id] = (groupSeen[r.groupe_id] || 0) + 1;
+        groupBadge = `<span style="font-size:.7rem;color:var(--taupe-dark);background:var(--beige);border-radius:6px;padding:2px 6px;margin-left:6px;">${groupSeen[r.groupe_id]}/${groupCounts[r.groupe_id]}</span>`;
+      }
+      return `
+      <div style="background:var(--white);border:1px solid var(--beige-mid);border-left:4px solid ${getPrestationColor(r.prestation_nom)};border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;gap:16px;cursor:pointer;" onclick='openModal(${JSON.stringify(r)})'>
         <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;min-width:64px;">${r.heure}</div>
         <div style="flex:1;">
-          <div style="font-weight:500;font-size:.9rem;">${r.prenom} ${r.nom}</div>
+          <div style="font-weight:500;font-size:.9rem;">${r.prenom} ${r.nom}${groupBadge}</div>
           <div style="font-size:.78rem;color:var(--taupe-dark);">${r.prestation_nom} · ${formatDur(r.duree_min)}</div>
         </div>
         <div style="text-align:right;">
@@ -906,7 +1050,8 @@ async function loadAgenda() {
           <div style="font-size:.75rem;color:var(--taupe-dark);">Acompte : ${r.acompte} €</div>
         </div>
         ${badgeHtml(r.statut)}
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   if (agendaView === 'planning') renderPlanning(agendaData);
@@ -961,6 +1106,8 @@ function getPrestationColor(nom) {
 }
 let agendaBlocages = [];
 let agendaFerme = false;
+let agendaOpenStart = '09:00';
+let agendaOpenEnd = '17:00';
 
 function renderPlanning(data) {
   const container = document.getElementById('agenda-planning');
@@ -995,6 +1142,9 @@ function renderPlanning(data) {
     linesHtml += `<div class="planning-hour-line" style="top:${top}px;"></div>`;
   }
 
+  const groupCounts = {};
+  data.forEach(r => { if (r.groupe_id) groupCounts[r.groupe_id] = (groupCounts[r.groupe_id] || 0) + 1; });
+  const groupSeen = {};
   const blocksHtml = data.map((r, i) => {
     const start = timeToMin(r.heure);
     const dur = r.duree_min || 30;
@@ -1003,8 +1153,13 @@ function renderPlanning(data) {
     const color = getPrestationColor(r.prestation_nom);
     const endMin = start + dur;
     const endStr = `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
+    let groupBadge = '';
+    if (r.groupe_id) {
+      groupSeen[r.groupe_id] = (groupSeen[r.groupe_id] || 0) + 1;
+      groupBadge = ` <span style="opacity:.75;">(${groupSeen[r.groupe_id]}/${groupCounts[r.groupe_id]})</span>`;
+    }
     return `<div class="planning-block" style="top:${top}px;height:${height}px;background:${color};border-left-color:var(--taupe-dark);" onclick='openModal(${JSON.stringify(r)})'>
-      <div class="planning-block-name">${r.prenom} ${r.nom}</div>
+      <div class="planning-block-name">${r.prenom} ${r.nom}${groupBadge}</div>
       <div class="planning-block-meta">${r.prestation_nom}</div>
       <div class="planning-block-meta">${r.heure} - ${endStr} · ${r.prix} €</div>
     </div>`;
@@ -1025,9 +1180,24 @@ function renderPlanning(data) {
     ? `<div class="planning-block planning-ferme" style="top:0px;height:${totalHeight}px;">🚫 Salon fermé ce jour</div>`
     : '';
 
+  let outsideHoursHtml = '';
+  if (!agendaFerme) {
+    const openStartMin = timeToMin(agendaOpenStart);
+    const openEndMin = timeToMin(agendaOpenEnd);
+    if (openStartMin > minStart) {
+      const h = (openStartMin - minStart) * PX_PER_MIN;
+      outsideHoursHtml += `<div style="position:absolute;top:0px;left:0;right:0;height:${h}px;background:repeating-linear-gradient(45deg,rgba(0,0,0,0.045),rgba(0,0,0,0.045) 6px,rgba(0,0,0,0.02) 6px,rgba(0,0,0,0.02) 12px);pointer-events:none;z-index:1;"></div>`;
+    }
+    if (openEndMin < maxEnd) {
+      const top = (openEndMin - minStart) * PX_PER_MIN;
+      const h = (maxEnd - openEndMin) * PX_PER_MIN;
+      outsideHoursHtml += `<div style="position:absolute;top:${top}px;left:0;right:0;height:${h}px;background:repeating-linear-gradient(45deg,rgba(0,0,0,0.045),rgba(0,0,0,0.045) 6px,rgba(0,0,0,0.02) 6px,rgba(0,0,0,0.02) 12px);pointer-events:none;z-index:1;"></div>`;
+    }
+  }
+
   container.innerHTML = `<div class="planning-wrap">
     <div class="planning-hours" style="height:${totalHeight}px;">${hoursHtml}</div>
-    <div class="planning-track" style="height:${totalHeight}px;">${linesHtml}${fermeOverlay}${blocksHtml}${blocagesHtml}</div>
+    <div class="planning-track" style="height:${totalHeight}px;">${linesHtml}${outsideHoursHtml}${fermeOverlay}${blocksHtml}${blocagesHtml}</div>
   </div>`;
 }
 
