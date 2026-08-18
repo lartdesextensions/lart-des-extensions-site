@@ -181,6 +181,7 @@ tr:hover td{background:var(--cream);}
     <div class="nav-section">Gestion</div>
     <div class="nav-item" onclick="showSection('disponibilites')">🗓 Disponibilités</div>
     <div class="nav-item" onclick="showSection('prestations')">✂️ Prestations</div>
+    <div class="nav-item" onclick="showSection('clients')">👤 Clients</div>
     <div class="nav-item" onclick="showSection('bloques')">🚫 Clients bloqués</div>
     <div class="nav-item" onclick="showSection('parametres')">⚙️ Paramètres</div>
   </div>
@@ -353,6 +354,33 @@ tr:hover td{background:var(--cream);}
       </div>
     </div>
 
+    <!-- CLIENTS -->
+    <div class="section" id="sec-clients">
+      <div class="content-title">Clients</div>
+      <div class="content-sub">Fiches clientes — se remplissent automatiquement lors des réservations en ligne ou manuelles</div>
+      <div class="field" style="margin-bottom:16px;">
+        <input type="text" id="clients-search" placeholder="Rechercher par nom, téléphone ou email..." oninput="renderClientsList()" style="width:100%;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;box-sizing:border-box;">
+      </div>
+      <div id="clients-list" style="margin-bottom:20px;"></div>
+      <div class="form-card" id="client-form-card">
+        <div class="form-card-title" id="client-form-title">Ajouter une cliente</div>
+        <div class="field-row">
+          <div class="field"><label>Prénom</label><input type="text" id="cf-prenom"></div>
+          <div class="field"><label>Nom</label><input type="text" id="cf-nom"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Téléphone</label><input type="tel" id="cf-telephone"></div>
+          <div class="field"><label>Email</label><input type="email" id="cf-email"></div>
+        </div>
+        <div class="field" style="margin-bottom:12px;"><label>Notes (optionnel)</label><input type="text" id="cf-notes" placeholder="Ex : allergies, préférences..."></div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button class="btn" onclick="saveClient()">Enregistrer</button>
+          <button class="btn btn-outline" onclick="resetClientForm()">Annuler</button>
+        </div>
+        <div id="client-msg"></div>
+      </div>
+    </div>
+
     <!-- CLIENTS BLOQUES -->
     <div class="section" id="sec-bloques">
       <div class="content-title">Clients bloqués</div>
@@ -447,6 +475,11 @@ tr:hover td{background:var(--cream);}
         </div>
       </div>
       <div id="nr-total-summary" style="font-size:.8rem;color:var(--taupe-dark);margin-bottom:14px;"></div>
+    </div>
+    <div class="field" style="margin-bottom:14px;position:relative;">
+      <label>Rechercher une cliente existante (optionnel)</label>
+      <input type="text" id="nr-client-search" placeholder="Tape un nom, téléphone ou email..." oninput="onNrClientSearch()" autocomplete="off" style="width:100%;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;box-sizing:border-box;">
+      <div id="nr-client-suggestions" style="position:absolute;left:0;right:0;top:100%;background:var(--white);border:1px solid var(--beige-mid);border-radius:8px;margin-top:4px;max-height:220px;overflow-y:auto;z-index:50;display:none;"></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Prénom</label><input type="text" id="nr-prenom" placeholder="Marie"></div>
@@ -601,6 +634,7 @@ function showSection(id) {
   if (id === 'agenda') loadAgenda();
   if (id === 'reservations') loadReservations();
   if (id === 'prestations') loadPrestations();
+  if (id === 'clients') loadClients();
   if (id === 'bloques') loadBloques();
   if (id === 'disponibilites') { renderAdminCal(); loadWeeklyHours(); loadBlocages(); }
 }
@@ -720,10 +754,49 @@ function endOfWeek(d) { const s = startOfWeek(d); s.setDate(s.getDate() + 6); re
 // ── NOUVEAU RDV MANUEL / MODIFICATION ──
 let nrPrestations = [];
 let editingRdvId = null;
+let nrClients = [];
+
+async function ensureNrClientsLoaded() {
+  if (nrClients.length > 0) return;
+  const { data } = await dbCall('clients', 'select', { order: [{ col: 'nom' }] });
+  nrClients = data || [];
+}
+
+function onNrClientSearch() {
+  const q = document.getElementById('nr-client-search').value.trim().toLowerCase();
+  const box = document.getElementById('nr-client-suggestions');
+  if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const matches = nrClients.filter(c =>
+    (c.prenom + ' ' + c.nom).toLowerCase().includes(q) ||
+    (c.telephone || '').includes(q) ||
+    (c.email || '').toLowerCase().includes(q)
+  ).slice(0, 8);
+  if (matches.length === 0) {
+    box.innerHTML = '<div style="padding:10px 14px;font-size:.82rem;color:var(--taupe);">Aucune correspondance — elle sera créée automatiquement à l\'enregistrement.</div>';
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = matches.map(c => `
+    <div onclick='selectNrClient(${JSON.stringify(c)})' style="padding:10px 14px;border-top:1px solid var(--beige-mid);cursor:pointer;font-size:.85rem;">
+      <div style="font-weight:600;">${c.prenom} ${c.nom}</div>
+      <div style="font-size:.75rem;color:var(--taupe-dark);">${c.telephone || ''}${c.telephone && c.email ? ' · ' : ''}${c.email || ''}</div>
+    </div>`).join('');
+  box.style.display = 'block';
+}
+
+function selectNrClient(c) {
+  document.getElementById('nr-prenom').value = c.prenom || '';
+  document.getElementById('nr-nom').value = c.nom || '';
+  document.getElementById('nr-tel').value = c.telephone || '';
+  document.getElementById('nr-email').value = c.email || '';
+  document.getElementById('nr-client-search').value = `${c.prenom} ${c.nom}`;
+  document.getElementById('nr-client-suggestions').style.display = 'none';
+}
 
 async function ensureNrPrestationsLoaded() {
   if (nrPrestations.length > 0) return;
   const { data } = await dbCall('prestations', 'select', {
+    filters: [{ col: 'actif', op: 'eq', value: true }],
     order: [{ col: 'ordre' }]
   });
   nrPrestations = data || [];
@@ -765,6 +838,9 @@ async function openNewRdvModal() {
   document.getElementById('nr-nom-libre').value = '';
   document.getElementById('nr-custom-row').style.display = 'none';
   document.getElementById('nr-msg').textContent = '';
+  document.getElementById('nr-client-search').value = '';
+  document.getElementById('nr-client-suggestions').style.display = 'none';
+  ensureNrClientsLoaded();
 
   await ensureNrPrestationsLoaded();
   document.getElementById('nr-prestation').value = '';
@@ -783,6 +859,9 @@ async function openEditRdvModal() {
   if (!currentRdv) return;
   editingRdvId = currentRdv.id;
   closeModal();
+  document.getElementById('nr-client-search').value = '';
+  document.getElementById('nr-client-suggestions').style.display = 'none';
+  ensureNrClientsLoaded();
   await ensureNrPrestationsLoaded();
 
   document.getElementById('nr-modal-title').textContent = 'Modifier le rendez-vous';
@@ -1041,6 +1120,18 @@ async function saveNewRdv() {
     msg.style.color = 'var(--error)';
     msg.textContent = 'Erreur : ' + err.message;
     return;
+  }
+
+  // Crée ou met à jour la fiche client (best-effort, sans bloquer le RDV en cas d'échec)
+  try {
+    await fetch('/.netlify/functions/upsert-client', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prenom, nom, telephone: tel, email })
+    });
+    nrClients = []; // force le rechargement de la liste au prochain modal
+  } catch (err) {
+    console.error('Erreur upsert-client:', err);
   }
 
   if (newReservationId && email) {
@@ -1877,6 +1968,90 @@ async function togglePrest(id, actif) {
     filters: [{ col: 'id', op: 'eq', value: id }]
   });
   loadPrestations();
+}
+
+// ── CLIENTS ──
+let allClients = [];
+let editClientId = null;
+
+async function loadClients() {
+  const { data } = await dbCall('clients', 'select', { order: [{ col: 'nom' }] });
+  allClients = data || [];
+  renderClientsList();
+}
+
+function renderClientsList() {
+  const q = (document.getElementById('clients-search').value || '').trim().toLowerCase();
+  const filtered = !q ? allClients : allClients.filter(c =>
+    (c.prenom + ' ' + c.nom).toLowerCase().includes(q) ||
+    (c.telephone || '').includes(q) ||
+    (c.email || '').toLowerCase().includes(q)
+  );
+  const container = document.getElementById('clients-list');
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--taupe);background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;">Aucune cliente trouvée.</div>';
+    return;
+  }
+  container.innerHTML = `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead style="background:var(--beige);"><tr>
+      <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Nom</th>
+      <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Téléphone</th>
+      <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Email</th>
+      <th style="padding:10px 14px;"></th>
+    </tr></thead>
+    <tbody>${filtered.map(c => `<tr style="border-top:1px solid var(--beige-mid);">
+      <td style="padding:10px 14px;">${c.prenom} ${c.nom}</td>
+      <td style="padding:10px 14px;">${c.telephone || '—'}</td>
+      <td style="padding:10px 14px;">${c.email || '—'}</td>
+      <td style="padding:10px 14px;"><button class="action-btn" onclick='editClient(${JSON.stringify(c)})'>Modifier</button></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function editClient(c) {
+  editClientId = c.id;
+  document.getElementById('cf-prenom').value = c.prenom || '';
+  document.getElementById('cf-nom').value = c.nom || '';
+  document.getElementById('cf-telephone').value = c.telephone || '';
+  document.getElementById('cf-email').value = c.email || '';
+  document.getElementById('cf-notes').value = c.notes || '';
+  document.getElementById('client-form-title').textContent = 'Modifier la fiche cliente';
+  document.getElementById('client-form-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function resetClientForm() {
+  editClientId = null;
+  document.getElementById('cf-prenom').value = '';
+  document.getElementById('cf-nom').value = '';
+  document.getElementById('cf-telephone').value = '';
+  document.getElementById('cf-email').value = '';
+  document.getElementById('cf-notes').value = '';
+  document.getElementById('client-form-title').textContent = 'Ajouter une cliente';
+  document.getElementById('client-msg').textContent = '';
+}
+
+async function saveClient() {
+  const prenom = document.getElementById('cf-prenom').value.trim();
+  const nom = document.getElementById('cf-nom').value.trim();
+  const telephone = document.getElementById('cf-telephone').value.trim();
+  const email = document.getElementById('cf-email').value.trim();
+  const notes = document.getElementById('cf-notes').value.trim();
+  if (!prenom || !nom) { showMsg('client-msg', 'Le prénom et le nom sont requis.', false); return; }
+
+  if (editClientId) {
+    await dbCall('clients', 'update', {
+      payload: { prenom, nom, telephone, email, notes },
+      filters: [{ col: 'id', op: 'eq', value: editClientId }]
+    });
+  } else {
+    await dbCall('clients', 'insert', {
+      payload: { prenom, nom, telephone, email, notes }
+    });
+  }
+  showMsg('client-msg', 'Fiche cliente enregistrée !', true);
+  resetClientForm();
+  nrClients = []; // force le rechargement pour le sélecteur du modal RDV
+  loadClients();
 }
 
 // ── UTILS ──
