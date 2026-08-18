@@ -444,28 +444,41 @@ async function renderSlots(dateStr, avail) {
 
   const duree = selected.prestation ? selected.prestation.duree_min : 60;
   const bookings = bookedCache[dateStr];
-  const slots = [];
+
+  // Grille standard toutes les 30 min...
+  const slotTimes = new Set();
   for (let h = startH; h < endH; h++) {
     for (let m = 0; m < 60; m += 30) {
-      const sStart = h * 60 + m;
-      const sEnd = sStart + duree;
-      if (sEnd > endH * 60) break;
-      const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-      // Check if booked
-      const conflict = bookings.some(b => {
-        const bStart = timeToMin(b.heure);
-        const bEnd = bStart + b.duree_min;
-        return sStart < bEnd && sEnd > bStart;
-      });
-      // Recommandé = ce créneau colle exactement à un rdv déjà existant (avant ou après), évitant un trou dans le planning
-      const recommended = !conflict && bookings.some(b => {
-        const bStart = timeToMin(b.heure);
-        const bEnd = bStart + b.duree_min;
-        return sEnd === bStart || sStart === bEnd;
-      });
-      slots.push({ time: timeStr, booked: conflict, recommended });
+      slotTimes.add(h * 60 + m);
     }
   }
+  // ...+ l'heure de fin exacte de chaque rdv/blocage déjà existant, pour que les
+  // créneaux collent parfaitement aux rendez-vous déjà pris et évitent tout trou
+  bookings.forEach(b => {
+    const end = timeToMin(b.heure) + b.duree_min;
+    if (end >= startH * 60 && end < endH * 60) slotTimes.add(end);
+  });
+
+  const slots = [];
+  Array.from(slotTimes).sort((a, b) => a - b).forEach(sStart => {
+    const sEnd = sStart + duree;
+    if (sEnd > endH * 60) return;
+    const h = Math.floor(sStart / 60), m = sStart % 60;
+    const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    // Check if booked
+    const conflict = bookings.some(b => {
+      const bStart = timeToMin(b.heure);
+      const bEnd = bStart + b.duree_min;
+      return sStart < bEnd && sEnd > bStart;
+    });
+    // Recommandé = ce créneau colle exactement à un rdv déjà existant (avant ou après), évitant un trou dans le planning
+    const recommended = !conflict && bookings.some(b => {
+      const bStart = timeToMin(b.heure);
+      const bEnd = bStart + b.duree_min;
+      return sEnd === bStart || sStart === bEnd;
+    });
+    slots.push({ time: timeStr, booked: conflict, recommended });
+  });
 
   if (slots.length === 0) {
     grid.innerHTML = '<div class="slots-empty">Aucun créneau disponible ce jour.</div>';
