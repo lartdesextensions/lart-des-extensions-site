@@ -1060,35 +1060,35 @@ async function loadAgenda() {
 function getPrestationColor(nom) {
   const n = (nom || '').toLowerCase();
 
-  // Kératine — dégradé rose (clair → foncé), dépose toujours en rouge
-  if (n.includes('dépose kératine salon') || n.includes('depose keratine salon')) return '#E63946'; // rouge vif
-  if (n.includes('dépose kératine externe') || n.includes('depose keratine externe')) return '#7A1F2B'; // rouge foncé
-  if (n.includes('kératine entretien') || n.includes('keratine entretien')) return '#C25B7A'; // rose foncé (dépose + repose)
+  // Kératine — dégradé rose (clair → foncé), dépose toujours en corail
+  if (n.includes('dépose kératine salon') || n.includes('depose keratine salon')) return '#F2867E'; // corail clair
+  if (n.includes('dépose kératine externe') || n.includes('depose keratine externe')) return '#D96A63'; // corail moyen
+  if (n.includes('kératine entretien') || n.includes('keratine entretien')) return '#D98CA3'; // rose moyen (dépose + repose)
   if (n.includes('kératine nouvelle pose') || n.includes('keratine nouvelle pose')) return '#FADCE0'; // rose clair
 
-  // Bandes adhésives — dégradé bleu (clair → foncé), dépose toujours en rouge
-  if (n.includes('dépose bandes') || n.includes('depose bandes')) return '#E63946'; // rouge vif
-  if (n.includes('entretien shampoing')) return '#164080'; // bleu le plus foncé (entretien + shampoing)
-  if (n.includes('entretien classique')) return '#1F5FA8'; // bleu foncé, pas trop (entretien)
-  if (n.includes('repose bandes')) return '#3182CE'; // bleu moyen-foncé (repose déjà porté)
-  if (n.includes('pose seule')) return '#5AA9E0'; // bleu moyen (posé seul)
-  if (n.includes('nouvelle pose') && n.includes('inject')) return '#8FCBEF'; // bleu clair-moyen (nouvelle pose injectée)
-  if (n.includes('nouvelle pose') && n.includes('bande')) return '#C7E6FA'; // bleu très clair (nouvelle pose)
+  // Bandes adhésives — dégradé bleu (clair → foncé), dépose toujours en corail
+  if (n.includes('dépose bandes') || n.includes('depose bandes')) return '#F2867E'; // corail clair
+  if (n.includes('entretien shampoing')) return '#3D79B8'; // bleu le plus soutenu (entretien + shampoing)
+  if (n.includes('entretien classique')) return '#4C93D1'; // bleu soutenu (entretien)
+  if (n.includes('repose bandes')) return '#5CADE0'; // bleu moyen-soutenu (repose déjà porté)
+  if (n.includes('pose seule')) return '#7FC0EA'; // bleu moyen (posé seul)
+  if (n.includes('nouvelle pose') && n.includes('inject')) return '#AED9F5'; // bleu clair-moyen (nouvelle pose injectée)
+  if (n.includes('nouvelle pose') && n.includes('bande')) return '#D6EEFB'; // bleu très clair (nouvelle pose)
 
-  // Tissage — dégradé violet (clair → foncé), dépose toujours en rouge
-  if (n.includes('dépose tissage salon') || n.includes('depose tissage salon')) return '#E63946'; // rouge vif
-  if (n.includes('dépose tissage externe') || n.includes('depose tissage externe')) return '#7A1F2B'; // rouge foncé
-  if (n.includes('tissage entretien')) return '#7856A8'; // violet foncé, pas trop (entretien)
+  // Tissage — dégradé violet (clair → foncé), dépose toujours en corail
+  if (n.includes('dépose tissage salon') || n.includes('depose tissage salon')) return '#F2867E'; // corail clair
+  if (n.includes('dépose tissage externe') || n.includes('depose tissage externe')) return '#D96A63'; // corail moyen
+  if (n.includes('tissage entretien')) return '#A98FCB'; // violet soutenu (entretien)
   if (n.includes('tissage')) return '#E0D4F5'; // violet clair (nouvelle pose)
 
   // Coloration
-  if (n.includes('coloration') || n.includes('racines') || n.includes('couleur')) return '#B8336A'; // fuchsia/framboise
+  if (n.includes('coloration') || n.includes('racines') || n.includes('couleur')) return '#E58AB0'; // rose framboise clair
 
   // Balayage / Ombré
   if (n.includes('balayage') || n.includes('ombré') || n.includes('ombre hair')) return '#9CAF88'; // vert sauge
 
   // Soins
-  if (n.includes('soin')) return '#C1652F'; // terracotta
+  if (n.includes('soin')) return '#D98F5C'; // terracotta clair
 
   // Shampoing / Coiffage
   if (n.includes('shampoing') || n.includes('wavy') || n.includes('brushing') || n.includes('patine')) return '#F4941E'; // orange
@@ -1097,7 +1097,7 @@ function getPrestationColor(nom) {
   if (n.includes('lissage')) return '#B8E6C1'; // vert pastel
 
   // Formation
-  if (n.includes('formation')) return '#2ECC71'; // vert pétant
+  if (n.includes('formation')) return '#5CD98A'; // vert clair
 
   // Diagnostic
   if (n.includes('diagnostic')) return '#FCEFA1'; // jaune pastel
