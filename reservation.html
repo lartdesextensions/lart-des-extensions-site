@@ -425,7 +425,16 @@ async function renderSlots(dateStr, avail) {
         filters: [{ col: 'date', op: 'eq', value: dateStr }]
       })
     ]);
-    const rdvOccupations = (rdvs || []).map(r => ({ heure: r.heure, duree_min: r.duree_min }));
+    const now = Date.now();
+    const PENDING_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+    const activeRdvs = (rdvs || []).filter(r => {
+      if (r.statut === 'en_attente' && !r.acompte_paye && r.created_at) {
+        const created = new Date(String(r.created_at).replace(' ', 'T') + 'Z').getTime();
+        if (!isNaN(created) && (now - created) > PENDING_TIMEOUT_MS) return false;
+      }
+      return true;
+    });
+    const rdvOccupations = activeRdvs.map(r => ({ heure: r.heure, duree_min: r.duree_min }));
     const blocageOccupations = (blocages || []).map(b => ({
       heure: b.heure_debut,
       duree_min: timeToMin(b.heure_fin) - timeToMin(b.heure_debut)
@@ -604,6 +613,14 @@ async function ensureReservationSaved() {
   });
 
   currentReservationId = data.id;
+
+  // Crée ou met à jour la fiche client (best-effort, ne bloque jamais le parcours de paiement)
+  fetch('/.netlify/functions/upsert-client', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prenom, nom, telephone: tel, email })
+  }).catch(() => {});
+
   return currentReservationId;
 }
 
