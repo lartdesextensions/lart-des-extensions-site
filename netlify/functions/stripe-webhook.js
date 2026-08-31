@@ -1,6 +1,6 @@
 const Stripe = require('stripe');
 const { getDb } = require('./lib/turso');
-const { sendConfirmationEmail } = require('./lib/email');
+const { sendConfirmationEmail, sendClientConfirmationEmail } = require('./lib/email');
 
 exports.handler = async function (event) {
   const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
@@ -31,7 +31,12 @@ exports.handler = async function (event) {
       const updated = updateRes.rows[0];
 
       if (updated) {
+        // Notification interne pour le salon
         await sendConfirmationEmail(updated);
+        // Confirmation envoyée à la cliente (manquait jusqu'ici pour les paiements en ligne)
+        if (updated.email) {
+          await sendClientConfirmationEmail(updated);
+        }
       } else {
         console.error('Réservation introuvable pour mise à jour Stripe:', reservationId);
       }
