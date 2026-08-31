@@ -344,19 +344,23 @@ async function renderCalendar() {
 
   // Fetch availability for this month
   const monthKey = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
+  const monthStart = `${calYear}-${String(calMonth+1).padStart(2,'0')}-01`;
+  const monthEnd = `${calYear}-${String(calMonth+1).padStart(2,'0')}-31`;
   if (!availabilityCache[monthKey]) {
-    const start = `${calYear}-${String(calMonth+1).padStart(2,'0')}-01`;
-    const end = `${calYear}-${String(calMonth+1).padStart(2,'0')}-31`;
     const { data } = await dbCall('disponibilites', 'select', {
-      filters: [{ col: 'date', op: 'gte', value: start }, { col: 'date', op: 'lte', value: end }]
+      filters: [{ col: 'date', op: 'gte', value: monthStart }, { col: 'date', op: 'lte', value: monthEnd }]
     });
     availabilityCache[monthKey] = data || [];
   }
+
+  // Fetch bookings for the whole month at once, pour pouvoir détecter les jours complets
+  await ensureMonthBookingsLoaded(monthKey, monthStart, monthEnd);
 
   const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=dim
   const adjust = (firstDay === 0) ? 6 : firstDay - 1; // make monday=0
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
   const todayStr = formatDate(today);
+  const duree = selected.prestation ? selected.prestation.duree_min : 60;
 
   for (let i = 0; i < adjust; i++) grid.insertAdjacentHTML('beforeend', '<div class="cal-day empty"></div>');
 
@@ -370,10 +374,18 @@ async function renderCalendar() {
     const avail = availabilityCache[monthKey].find(a => a.date === dateStr);
     const isClosed = avail ? avail.ferme : isWeekdayClosed(weekly, dow);
 
+    // Si le jour est ouvert, vérifie s'il reste au moins un créneau libre pour la prestation sélectionnée
+    let isFull = false;
+    if (!isPast && !isClosed) {
+      const bookings = bookedCache[dateStr] || [];
+      const daySlots = computeDaySlots(dow, weekly, avail, bookings, duree);
+      isFull = daySlots.length === 0 || !daySlots.some(s => !s.booked);
+    }
+
     let cls = 'cal-day';
     let clickable = false;
     if (isPast) cls += ' past';
-    else if (isClosed) cls += ' closed';
+    else if (isClosed || isFull) cls += ' closed';
     else { cls += ' available'; clickable = true; }
     if (dateStr === selected.date) cls += ' selected';
     if (dateStr === todayStr) cls += ' today';
@@ -381,9 +393,98 @@ async function renderCalendar() {
     const el = document.createElement('div');
     el.className = cls;
     el.textContent = d;
+    if (isFull && !isClosed) el.title = 'Complet — aucun créneau disponible';
     if (clickable) el.onclick = () => selectDate(dateStr, avail);
     grid.appendChild(el);
   }
+}
+
+// Charge en une seule fois les réservations + blocages horaires de tout le mois affiché,
+// et les range dans bookedCache par date (même format que renderSlots utilisait déjà).
+async function ensureMonthBookingsLoaded(monthKey, start, end) {
+  const marker = '_month_' + monthKey;
+  if (bookedCache[marker]) return;
+
+  const [{ data: rdvs }, { data: blocages }] = await Promise.all([
+    dbCall('reservations', 'select', {
+      filters: [
+        { col: 'date', op: 'gte', value: start },
+        { col: 'date', op: 'lte', value: end },
+        { col: 'statut', op: 'neq', value: 'annule' }
+      ]
+    }),
+    dbCall('indisponibilites', 'select', {
+      filters: [{ col: 'date', op: 'gte', value: start }, { col: 'date', op: 'lte', value: end }]
+    })
+  ]);
+
+  const now = Date.now();
+  const PENDING_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+  const activeRdvs = (rdvs || []).filter(r => {
+    if (r.statut === 'en_attente' && !r.acompte_paye && r.created_at) {
+      const created = new Date(String(r.created_at).replace(' ', 'T') + 'Z').getTime();
+      if (!isNaN(created) && (now - created) > PENDING_TIMEOUT_MS) return false;
+    }
+    return true;
+  });
+
+  activeRdvs.forEach(r => {
+    if (!bookedCache[r.date]) bookedCache[r.date] = [];
+    bookedCache[r.date].push({ heure: r.heure, duree_min: r.duree_min });
+  });
+  (blocages || []).forEach(b => {
+    if (!bookedCache[b.date]) bookedCache[b.date] = [];
+    bookedCache[b.date].push({ heure: b.heure_debut, duree_min: timeToMin(b.heure_fin) - timeToMin(b.heure_debut) });
+  });
+
+  bookedCache[marker] = true;
+}
+
+// Calcule la liste des créneaux (libres + occupés) pour un jour donné, une durée de prestation
+// donnée et une liste de réservations/blocages déjà en cours ce jour-là.
+// Utilisée à la fois par renderCalendar (pour savoir si le jour est complet) et renderSlots.
+function computeDaySlots(dow, weekly, avail, bookings, dureeMin) {
+  let startH = 9, endH = 17;
+  const defStart = weekly[`hours_${dow}_start`];
+  const defEnd = weekly[`hours_${dow}_end`];
+  if (defStart) startH = parseInt(defStart.split(':')[0]);
+  if (defEnd) endH = parseInt(defEnd.split(':')[0]);
+  if (avail && avail.heure_debut) startH = parseInt(avail.heure_debut.split(':')[0]);
+  if (avail && avail.heure_fin) endH = parseInt(avail.heure_fin.split(':')[0]);
+
+  const slotTimes = new Set();
+  for (let h = startH; h < endH; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      slotTimes.add(h * 60 + m);
+    }
+  }
+  // ...+ l'heure de fin exacte de chaque rdv/blocage déjà existant, pour que les
+  // créneaux collent parfaitement aux rendez-vous déjà pris et évitent tout trou
+  bookings.forEach(b => {
+    const end = timeToMin(b.heure) + b.duree_min;
+    if (end >= startH * 60 && end < endH * 60) slotTimes.add(end);
+  });
+
+  const slots = [];
+  Array.from(slotTimes).sort((a, b) => a - b).forEach(sStart => {
+    const sEnd = sStart + dureeMin;
+    if (sEnd > endH * 60) return;
+    const h = Math.floor(sStart / 60), m = sStart % 60;
+    const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    const conflict = bookings.some(b => {
+      const bStart = timeToMin(b.heure);
+      const bEnd = bStart + b.duree_min;
+      return sStart < bEnd && sEnd > bStart;
+    });
+    // Recommandé = ce créneau colle exactement à un rdv déjà existant (avant ou après), évitant un trou dans le planning
+    const recommended = !conflict && bookings.some(b => {
+      const bStart = timeToMin(b.heure);
+      const bEnd = bStart + b.duree_min;
+      return sEnd === bStart || sStart === bEnd;
+    });
+    slots.push({ time: timeStr, booked: conflict, recommended });
+  });
+  return slots;
 }
 
 function formatDate(d) {
@@ -407,15 +508,10 @@ async function renderSlots(dateStr, avail) {
   const dt = new Date(dateStr);
   const dow = dt.getDay(); // 0=dim
   const weekly = await getWeeklyHours();
-  let startH = 9, endH = 17;
-  const defStart = weekly[`hours_${dow}_start`];
-  const defEnd = weekly[`hours_${dow}_end`];
-  if (defStart) startH = parseInt(defStart.split(':')[0]);
-  if (defEnd) endH = parseInt(defEnd.split(':')[0]);
-  if (avail && avail.heure_debut) startH = parseInt(avail.heure_debut.split(':')[0]);
-  if (avail && avail.heure_fin) endH = parseInt(avail.heure_fin.split(':')[0]);
 
   // Get booked slots + blocages horaires for this date
+  // (déjà chargés en bloc pour tout le mois par renderCalendar → ensureMonthBookingsLoaded ;
+  // on ne refait un appel ciblé que si, pour une raison quelconque, ce n'était pas le cas)
   if (!bookedCache[dateStr]) {
     const [{ data: rdvs }, { data: blocages }] = await Promise.all([
       dbCall('reservations', 'select', {
@@ -444,41 +540,7 @@ async function renderSlots(dateStr, avail) {
 
   const duree = selected.prestation ? selected.prestation.duree_min : 60;
   const bookings = bookedCache[dateStr];
-
-  // Grille standard toutes les 30 min...
-  const slotTimes = new Set();
-  for (let h = startH; h < endH; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      slotTimes.add(h * 60 + m);
-    }
-  }
-  // ...+ l'heure de fin exacte de chaque rdv/blocage déjà existant, pour que les
-  // créneaux collent parfaitement aux rendez-vous déjà pris et évitent tout trou
-  bookings.forEach(b => {
-    const end = timeToMin(b.heure) + b.duree_min;
-    if (end >= startH * 60 && end < endH * 60) slotTimes.add(end);
-  });
-
-  const slots = [];
-  Array.from(slotTimes).sort((a, b) => a - b).forEach(sStart => {
-    const sEnd = sStart + duree;
-    if (sEnd > endH * 60) return;
-    const h = Math.floor(sStart / 60), m = sStart % 60;
-    const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-    // Check if booked
-    const conflict = bookings.some(b => {
-      const bStart = timeToMin(b.heure);
-      const bEnd = bStart + b.duree_min;
-      return sStart < bEnd && sEnd > bStart;
-    });
-    // Recommandé = ce créneau colle exactement à un rdv déjà existant (avant ou après), évitant un trou dans le planning
-    const recommended = !conflict && bookings.some(b => {
-      const bStart = timeToMin(b.heure);
-      const bEnd = bStart + b.duree_min;
-      return sEnd === bStart || sStart === bEnd;
-    });
-    slots.push({ time: timeStr, booked: conflict, recommended });
-  });
+  const slots = computeDaySlots(dow, weekly, avail, bookings, duree);
 
   if (slots.length === 0) {
     grid.innerHTML = '<div class="slots-empty">Aucun créneau disponible ce jour.</div>';
@@ -491,7 +553,7 @@ async function renderSlots(dateStr, avail) {
   const buildSlotEl = (s) => {
     const el = document.createElement('div');
     el.className = 'slot' + (s.booked ? ' booked' : '') + (s.recommended ? ' recommended' : '');
-    el.innerHTML = s.recommended ? `★ ${s.time}` : s.time;
+    el.textContent = s.time;
     if (!s.booked) el.onclick = () => {
       selected.heure = s.time;
       document.querySelectorAll('.slot').forEach(sl => sl.classList.remove('selected'));
@@ -504,11 +566,29 @@ async function renderSlots(dateStr, avail) {
   const recommended = slots.filter(s => s.recommended);
   const others = slots.filter(s => !s.recommended);
 
-  const finalGrid = document.createElement('div');
-  finalGrid.className = 'slots-grid';
-  recommended.forEach(s => finalGrid.appendChild(buildSlotEl(s)));
-  others.forEach(s => finalGrid.appendChild(buildSlotEl(s)));
-  grid.appendChild(finalGrid);
+  if (recommended.length) {
+    const titleRec = document.createElement('div');
+    titleRec.className = 'slots-group-title';
+    titleRec.textContent = '★ Recommandé';
+    grid.appendChild(titleRec);
+
+    const gridRec = document.createElement('div');
+    gridRec.className = 'slots-grid';
+    recommended.forEach(s => gridRec.appendChild(buildSlotEl(s)));
+    grid.appendChild(gridRec);
+  }
+
+  if (others.length) {
+    const titleOthers = document.createElement('div');
+    titleOthers.className = 'slots-group-title';
+    titleOthers.textContent = recommended.length ? 'Autres créneaux disponibles' : 'Créneaux disponibles';
+    grid.appendChild(titleOthers);
+
+    const gridOthers = document.createElement('div');
+    gridOthers.className = 'slots-grid';
+    others.forEach(s => gridOthers.appendChild(buildSlotEl(s)));
+    grid.appendChild(gridOthers);
+  }
 }
 
 function timeToMin(t) {
