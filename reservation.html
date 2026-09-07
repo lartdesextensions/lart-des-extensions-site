@@ -444,31 +444,31 @@ async function ensureMonthBookingsLoaded(monthKey, start, end) {
 // donnée et une liste de réservations/blocages déjà en cours ce jour-là.
 // Utilisée à la fois par renderCalendar (pour savoir si le jour est complet) et renderSlots.
 function computeDaySlots(dow, weekly, avail, bookings, dureeMin) {
-  let startH = 9, endH = 17;
+  // On travaille en minutes (et non en heures pleines) pour respecter les
+  // horaires du type 12:45 : parseInt('12:45') renvoyait 12 et perdait les minutes.
+  let startMin = 9 * 60, endMin = 17 * 60;
   const defStart = weekly[`hours_${dow}_start`];
   const defEnd = weekly[`hours_${dow}_end`];
-  if (defStart) startH = parseInt(defStart.split(':')[0]);
-  if (defEnd) endH = parseInt(defEnd.split(':')[0]);
-  if (avail && avail.heure_debut) startH = parseInt(avail.heure_debut.split(':')[0]);
-  if (avail && avail.heure_fin) endH = parseInt(avail.heure_fin.split(':')[0]);
+  if (defStart) startMin = timeToMin(defStart);
+  if (defEnd) endMin = timeToMin(defEnd);
+  if (avail && avail.heure_debut) startMin = timeToMin(avail.heure_debut);
+  if (avail && avail.heure_fin) endMin = timeToMin(avail.heure_fin);
 
   const slotTimes = new Set();
-  for (let h = startH; h < endH; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      slotTimes.add(h * 60 + m);
-    }
+  for (let t = startMin; t < endMin; t += 30) {
+    slotTimes.add(t);
   }
   // ...+ l'heure de fin exacte de chaque rdv/blocage déjà existant, pour que les
   // créneaux collent parfaitement aux rendez-vous déjà pris et évitent tout trou
   bookings.forEach(b => {
     const end = timeToMin(b.heure) + b.duree_min;
-    if (end >= startH * 60 && end < endH * 60) slotTimes.add(end);
+    if (end >= startMin && end < endMin) slotTimes.add(end);
   });
 
   const slots = [];
   Array.from(slotTimes).sort((a, b) => a - b).forEach(sStart => {
     const sEnd = sStart + dureeMin;
-    if (sEnd > endH * 60) return;
+    if (sEnd > endMin) return;
     const h = Math.floor(sStart / 60), m = sStart % 60;
     const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
     const conflict = bookings.some(b => {
