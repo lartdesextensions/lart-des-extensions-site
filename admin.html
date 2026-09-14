@@ -209,7 +209,7 @@ tr:hover td{background:var(--cream);}
       <div class="stats">
         <div class="stat-card"><div class="stat-num" id="dash-rdv">—</div><div class="stat-label">Rendez-vous</div></div>
         <div class="stat-card"><div class="stat-num" id="dash-ca">—</div><div class="stat-label">Chiffre d'affaires</div></div>
-        <div class="stat-card"><div class="stat-num" id="dash-acompte">—</div><div class="stat-label">Total acomptes encaissés</div></div>
+        <div class="stat-card"><div class="stat-num" id="dash-acompte">—</div><div class="stat-label">Total encaissé en ligne</div></div>
         <div class="stat-card"><div class="stat-num" id="dash-reste">—</div><div class="stat-label">Reste à encaisser au salon</div></div>
         <div class="stat-card"><div class="stat-num" id="dash-panier">—</div><div class="stat-label">Panier moyen par rendez-vous</div></div>
         <div class="stat-card"><div class="stat-num" id="dash-pending">—</div><div class="stat-label">En attente sur la période</div></div>
@@ -695,6 +695,13 @@ function computeDashRange() {
   return { start: `${y}-01-01`, end: `${y}-12-31`, label: String(y), sub: 'Du 1er janvier au 31 décembre ' + y };
 }
 
+// Montant réellement encaissé en ligne : montant_paye si renseigné (paiement intégral
+// ou acompte), sinon l'acompte — pour les RDV créés à la main et l'historique.
+function encaisseEnLigne(r) {
+  const paye = Number(r.montant_paye) || 0;
+  return paye > 0 ? paye : (Number(r.acompte) || 0);
+}
+
 async function renderDashboardStats() {
   if (!dashAllRdvs) return;
   const range = computeDashRange();
@@ -705,7 +712,7 @@ async function renderDashboardStats() {
 
   const inRange = dashAllRdvs.filter(r => r.date >= range.start && r.date <= range.end);
   const ca = inRange.reduce((s, r) => s + (r.prix || 0), 0);
-  const acompte = inRange.reduce((s, r) => s + (r.acompte || 0), 0);
+  const acompte = inRange.reduce((s, r) => s + encaisseEnLigne(r), 0);
   const pending = inRange.filter(r => r.statut === 'en_attente').length;
 
   document.getElementById('dash-rdv').textContent = inRange.length;
@@ -1210,7 +1217,7 @@ async function loadAgenda() {
 
   const summary = document.getElementById('agenda-summary');
   const totalPrix = agendaData.reduce((s, r) => s + (r.prix || 0), 0);
-  const totalAcompte = agendaData.reduce((s, r) => s + (r.acompte || 0), 0);
+  const totalAcompte = agendaData.reduce((s, r) => s + encaisseEnLigne(r), 0);
 
   if (agendaFerme) {
     summary.innerHTML = `<div class="stat-card" style="flex:1;min-width:200px;background:#FFEBEE;border-color:#EF9A9A;"><div class="stat-label" style="color:var(--error);font-size:.8rem;">🚫 Salon fermé ce jour</div></div>`;
@@ -1218,7 +1225,7 @@ async function loadAgenda() {
     summary.innerHTML = `
       <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${agendaData.length}</div><div class="stat-label">Rendez-vous</div></div>
       <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${totalPrix} €</div><div class="stat-label">Total prestations</div></div>
-      <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${totalAcompte} €</div><div class="stat-label">Total acomptes</div></div>`;
+      <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${totalAcompte} €</div><div class="stat-label">Total encaissé</div></div>`;
   }
 
   if (agendaData.length === 0) {
