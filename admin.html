@@ -490,6 +490,10 @@ tr:hover td{background:var(--cream);}
       <div class="field"><label>Acompte (€)</label><input type="number" id="nr-acompte" placeholder="0"></div>
     </div>
     <div class="field" style="margin-bottom:14px;"><label>Email (optionnel, pour envoyer la confirmation)</label><input type="email" id="nr-email" placeholder="cliente@email.com"></div>
+    <label style="display:flex;align-items:center;gap:10px;font-size:.85rem;margin-bottom:14px;cursor:pointer;">
+      <input type="checkbox" id="nr-acompte-paye" style="width:18px;height:18px;flex:0 0 auto;">
+      <span>Acompte déjà encaissé (espèces, virement, PayPal…)</span>
+    </label>
     <div id="nr-msg" style="font-size:.78rem;margin-top:8px;"></div>
     <div class="modal-actions">
       <button class="btn" onclick="saveNewRdv()">Enregistrer</button>
@@ -571,7 +575,7 @@ async function login() {
   const currentPwd = await getStoredAdminPwd();
   if (btn) btn.disabled = false;
   if (entered === currentPwd) {
-    sessionStorage.setItem('admin', '1');
+    setAdminSession();
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     initApp();
@@ -579,7 +583,30 @@ async function login() {
     document.getElementById('login-err').style.display = 'block';
   }
 }
+// Session conservée 30 jours dans localStorage : sessionStorage était vidé
+// dès que Safari déchargeait l'onglet en arrière-plan, d'où les reconnexions
+// permanentes sur iPhone.
+const ADMIN_SESSION_MS = 30 * 24 * 60 * 60 * 1000;
+
+function setAdminSession() {
+  try {
+    localStorage.setItem('admin_session', String(Date.now() + ADMIN_SESSION_MS));
+  } catch (e) {
+    sessionStorage.setItem('admin', '1'); // secours si le stockage est refusé
+  }
+}
+
+function adminSessionValide() {
+  try {
+    const exp = Number(localStorage.getItem('admin_session'));
+    if (exp && Date.now() < exp) return true;
+    if (exp) localStorage.removeItem('admin_session');
+  } catch (e) { /* stockage indisponible */ }
+  return sessionStorage.getItem('admin') === '1';
+}
+
 function logout() {
+  try { localStorage.removeItem('admin_session'); } catch (e) {}
   sessionStorage.removeItem('admin');
   location.reload();
 }
@@ -695,6 +722,21 @@ function computeDashRange() {
   return { start: `${y}-01-01`, end: `${y}-12-31`, label: String(y), sub: 'Du 1er janvier au 31 décembre ' + y };
 }
 
+// Une réservation non payée ne bloque jamais rien : tant que le paiement n'est pas
+// abouti, le créneau reste libre et le rendez-vous n'apparaît pas dans le planning.
+// (Les RDV créés à la main depuis l'admin sont en statut "confirme" : ils ne sont
+// jamais concernés.)
+function resteDu(r) {
+  return Math.max((Number(r.prix) || 0) - encaisseEnLigne(r), 0);
+}
+
+function reservationAbandonnee(r) {
+  if (r.statut !== 'en_attente') return false;
+  if (r.acompte_paye) return false;
+  if (Number(r.montant_paye) > 0) return false;
+  return true;
+}
+
 // Montant réellement encaissé en ligne : montant_paye si renseigné (paiement intégral
 // ou acompte), sinon l'acompte — pour les RDV créés à la main et l'historique.
 function encaisseEnLigne(r) {
@@ -746,7 +788,7 @@ async function loadDashboard() {
     order: [{ col: 'date' }, { col: 'heure' }]
   });
   if (!rdvs) return;
-  dashAllRdvs = rdvs;
+  dashAllRdvs = rdvs.filter(r => !reservationAbandonnee(r));
   await renderDashboardStats();
 
   const upcoming = rdvs.filter(r => r.date >= today).slice(0, 10);
@@ -841,6 +883,7 @@ async function openNewRdvModal() {
   document.getElementById('nr-nom').value = '';
   document.getElementById('nr-tel').value = '';
   document.getElementById('nr-acompte').value = '';
+  document.getElementById('nr-acompte-paye').checked = false;
   document.getElementById('nr-email').value = '';
   document.getElementById('nr-nom-libre').value = '';
   document.getElementById('nr-custom-row').style.display = 'none';
@@ -884,13 +927,14 @@ async function openEditRdvModal() {
   document.getElementById('nr-nom').value = currentRdv.nom || '';
   document.getElementById('nr-tel').value = currentRdv.telephone || '';
   document.getElementById('nr-acompte').value = currentRdv.acompte || '';
+  document.getElementById('nr-acompte-paye').checked = !!currentRdv.acompte_paye;
   document.getElementById('nr-email').value = currentRdv.email || '';
   document.getElementById('nr-add-prestation').value = '';
   document.getElementById('nr-supp-nom').value = '';
   document.getElementById('nr-supp-prix').value = '';
   document.getElementById('nr-supp-duree').value = '';
   nrExtraServices = [];
-  document.getElementById('nr-multi-section').style.display = 'none';
+  document.getElementById('nr-multi-section').style.display = '';
   document.getElementById('nr-msg').textContent = '';
 
   document.getElementById('modal-new-rdv').classList.add('open');
@@ -1068,6 +1112,7 @@ async function saveNewRdv() {
   const tel = document.getElementById('nr-tel').value.trim();
   const email = document.getElementById('nr-email').value.trim();
   const acompteTotal = Number(document.getElementById('nr-acompte').value) || 0;
+  const acomptePaye = document.getElementById('nr-acompte-paye').checked ? 1 : 0;
   const msg = document.getElementById('nr-msg');
 
   const primary = primaryServiceFromForm();
@@ -1085,17 +1130,51 @@ async function saveNewRdv() {
       const payload = {
         prenom, nom, telephone: tel, email,
         prestation_nom: primary.nom,
-        date, heure, duree_min: primary.duree_min, prix: primary.prix, acompte: acompteTotal
+        date, heure, duree_min: primary.duree_min, prix: primary.prix, acompte: acompteTotal,
+        acompte_paye: acomptePaye, montant_paye: acomptePaye ? acompteTotal : 0
       };
       await dbCall('reservations', 'update', {
         payload,
         filters: [{ col: 'id', op: 'eq', value: editingRdvId }]
       });
+
+      // Prestations ajoutées à un RDV existant : une ligne par prestation,
+      // enchaînées après la première et reliées par le même groupe_id.
+      if (nrExtraServices.length) {
+        const groupeId = (currentRdv && currentRdv.groupe_id)
+          || ('g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+
+        if (!(currentRdv && currentRdv.groupe_id)) {
+          await dbCall('reservations', 'update', {
+            payload: { groupe_id: groupeId },
+            filters: [{ col: 'id', op: 'eq', value: editingRdvId }]
+          });
+        }
+
+        let cursorMin = timeToMin(heure) + primary.duree_min;
+        for (const s2 of nrExtraServices) {
+          const hh = String(Math.floor(cursorMin / 60)).padStart(2, '0');
+          const mm = String(cursorMin % 60).padStart(2, '0');
+          await dbCall('reservations', 'insert', {
+            payload: {
+              prenom, nom, telephone: tel, email,
+              prestation_nom: s2.nom,
+              date, heure: `${hh}:${mm}`, duree_min: s2.duree_min, prix: s2.prix,
+              acompte: 0, acompte_paye: 0, montant_paye: 0,
+              message: '', statut: 'confirme', groupe_id: groupeId
+            },
+            single: true
+          });
+          cursorMin += s2.duree_min;
+        }
+        nrExtraServices = [];
+      }
     } else if (services.length === 1) {
       const payload = {
         prenom, nom, telephone: tel, email,
         prestation_nom: services[0].nom,
-        date, heure, duree_min: services[0].duree_min, prix: services[0].prix, acompte: acompteTotal
+        date, heure, duree_min: services[0].duree_min, prix: services[0].prix, acompte: acompteTotal,
+        acompte_paye: acomptePaye, montant_paye: acomptePaye ? acompteTotal : 0
       };
       const { data } = await dbCall('reservations', 'insert', {
         payload: { ...payload, message: '', statut: 'confirme' },
@@ -1116,6 +1195,8 @@ async function saveNewRdv() {
           prestation_nom: s.nom,
           date, heure: `${hh}:${mm}`, duree_min: s.duree_min, prix: s.prix,
           acompte: i === 0 ? acompteTotal : 0,
+          acompte_paye: i === 0 ? acomptePaye : 0,
+          montant_paye: (i === 0 && acomptePaye) ? acompteTotal : 0,
           message: '', statut: 'confirme', groupe_id: groupeId
         };
         const { data } = await dbCall('reservations', 'insert', { payload, single: true });
@@ -1207,7 +1288,7 @@ async function loadAgenda() {
       filters: [{ col: 'date', op: 'eq', value: date }]
     })
   ]);
-  agendaData = rdvs || [];
+  agendaData = (rdvs || []).filter(r => !reservationAbandonnee(r));
   agendaBlocages = blocages || [];
   await fetchWeeklySettings();
   const dispo = (dispos || [])[0];
@@ -1249,7 +1330,7 @@ async function loadAgenda() {
         </div>
         <div style="text-align:right;">
           <div style="font-weight:600;font-size:.9rem;">${r.prix} €</div>
-          <div style="font-size:.75rem;color:var(--taupe-dark);">Acompte : ${r.acompte} €</div>
+          <div style="font-size:.75rem;color:var(--taupe-dark);">Réglé : ${encaisseEnLigne(r)} € · Reste : ${resteDu(r)} €</div>
         </div>
         ${badgeHtml(r.statut)}
       </div>`;
@@ -1448,7 +1529,9 @@ function openModal(r) {
       <strong>Prestation :</strong> ${r.prestation_nom}<br>
       <strong>Date :</strong> ${fmtDateFR(r.date)} à ${r.heure}<br>
       <strong>Durée :</strong> ${formatDur(r.duree_min)}<br>
-      <strong>Prix :</strong> ${r.prix} € · Acompte : ${r.acompte} € — ${paiementLigne}<br>
+      <strong>Prix :</strong> ${r.prix} €<br>
+      <strong>Déjà réglé :</strong> ${encaisseEnLigne(r)} € — ${paiementLigne}<br>
+      <strong>Reste à encaisser :</strong> <span style="font-weight:600;color:${resteDu(r) > 0 ? 'var(--error)' : 'var(--success)'};">${resteDu(r)} €</span><br>
       <strong>Email :</strong> ${r.email || '—'}<br>
       <strong>Tél :</strong> ${r.telephone || '—'}<br>
       <strong>Message :</strong> ${r.message || '—'}<br>
@@ -2070,7 +2153,7 @@ function formatDur(min) { if (min < 60) return `${min} min`; const h = Math.floo
 function showMsg(id, txt, ok) { const el = document.getElementById(id); el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err'); el.textContent = txt; setTimeout(() => el.textContent = '', 3000); }
 
 // ── LANCEMENT (une fois toutes les fonctions et variables prêtes) ──
-if (sessionStorage.getItem('admin')) {
+if (adminSessionValide()) {
   document.getElementById('login-wrap').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   initApp();
