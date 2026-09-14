@@ -3,18 +3,32 @@ const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','a
 function buildTemplateParams(r) {
   const [y, m, d] = r.date.split('-').map(Number);
   const dateLabel = `${d} ${MONTHS_FR[m - 1]} ${y}`;
+
+  const prix = Number(r.prix) || 0;
+  // Montant réellement encaissé en ligne : montant_paye si la colonne est remplie,
+  // sinon on retombe sur l'acompte (réservations antérieures et RDV créés à la main).
+  const encaisse = Number(r.montant_paye) > 0 ? Number(r.montant_paye) : (Number(r.acompte) || 0);
+  const reste = Math.max(prix - encaisse, 0);
+  const toutPaye = reste === 0 && encaisse > 0;
+
   return {
     nom_cliente: `${r.prenom} ${r.nom}`,
     name: `${r.prenom} ${r.nom}`,
     email_cliente: r.email,
     prestation: r.prestation_nom,
-    total: r.prix,
-    acompte: r.acompte,
-    reste: r.prix - r.acompte,
+    total: prix,
+    acompte: encaisse,          // conservé pour les templates existants
+    montant_paye: encaisse,
+    reste: reste,
     date_rdv: `${dateLabel} à ${r.heure}`,
     heure_rdv: r.heure,
     telephone: r.telephone,
-    telephone_cliente: r.telephone
+    telephone_cliente: r.telephone,
+    type_paiement: toutPaye ? 'Totalité' : 'Acompte',
+    // Phrase prête à l'emploi : à insérer telle quelle dans les templates EmailJS
+    mention_solde: toutPaye
+      ? 'Votre prestation est intégralement réglée. Rien à prévoir le jour du rendez-vous.'
+      : `Un solde de ${reste} € sera à régler au salon le jour du rendez-vous.`
   };
 }
 
