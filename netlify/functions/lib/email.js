@@ -28,7 +28,7 @@ function buildTemplateParams(r) {
     // Phrase prête à l'emploi : à insérer telle quelle dans les templates EmailJS
     mention_solde: toutPaye
       ? 'Votre prestation est intégralement réglée. Rien à prévoir le jour du rendez-vous.'
-      : `Un solde de ${reste} € sera à régler au salon le jour du rendez-vous.`
+      : `Un solde de ${reste} € sera à régler sur place le jour du rendez-vous, en espèces ou par PayPal.`
   };
 }
 
