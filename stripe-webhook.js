@@ -1,44 +1,6 @@
 const Stripe = require('stripe');
 const { getDb } = require('./lib/turso');
-
-const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-
-async function sendConfirmationEmail(r) {
-  try {
-    const [y, m, d] = r.date.split('-').map(Number);
-    const dateLabel = `${d} ${MONTHS_FR[m - 1]} ${y}`;
-    const payload = {
-      service_id: 'service_8xq5hij',
-      template_id: 'template_bae1d9m',
-      user_id: 'pnSluawmsGb1F5d_i',
-      template_params: {
-        nom_cliente: `${r.prenom} ${r.nom}`,
-        email_cliente: r.email,
-        prestation: r.prestation_nom,
-        total: r.prix,
-        acompte: r.acompte,
-        reste: r.prix - r.acompte,
-        date_rdv: dateLabel,
-        heure_rdv: r.heure,
-        telephone_cliente: r.telephone
-      }
-    };
-    if (process.env.EMAILJS_PRIVATE_KEY) {
-      payload.accessToken = process.env.EMAILJS_PRIVATE_KEY;
-    }
-    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      console.error('Erreur envoi email admin (Stripe):', text);
-    }
-  } catch (e) {
-    console.error('Erreur envoi email admin (Stripe):', e);
-  }
-}
+const { sendConfirmationEmail, sendClientConfirmationEmail } = require('./lib/email');
 
 exports.handler = async function (event) {
   const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
@@ -62,14 +24,33 @@ exports.handler = async function (event) {
 
     if (reservationId) {
       const db = getDb();
+
+      // Montant réellement encaissé, tel que Stripe le confirme
+      const montantPaye = session.amount_total ? session.amount_total / 100 : 0;
+
+      const lookup = await db.execute({
+        sql: 'SELECT prix FROM reservations WHERE id = ?',
+        args: [reservationId]
+      });
+      const prix = lookup.rows[0] ? Number(lookup.rows[0].prix) : 0;
+      const typePaiement = (prix && montantPaye >= prix) ? 'total' : 'acompte';
+
       const updateRes = await db.execute({
-        sql: `UPDATE reservations SET acompte_paye = ?, payment_method = ?, payment_id = ?, statut = ? WHERE id = ? RETURNING *`,
-        args: [1, 'stripe', session.payment_intent, 'confirme', reservationId]
+        sql: `UPDATE reservations
+              SET acompte_paye = ?, montant_paye = ?, type_paiement = ?,
+                  payment_method = ?, payment_id = ?, statut = ?
+              WHERE id = ? RETURNING *`,
+        args: [1, montantPaye, typePaiement, 'stripe', session.payment_intent, 'confirme', reservationId]
       });
       const updated = updateRes.rows[0];
 
       if (updated) {
+        // Notification interne pour le salon
         await sendConfirmationEmail(updated);
+        // Confirmation envoyée à la cliente
+        if (updated.email) {
+          await sendClientConfirmationEmail(updated);
+        }
       } else {
         console.error('Réservation introuvable pour mise à jour Stripe:', reservationId);
       }
