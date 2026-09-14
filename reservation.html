@@ -926,8 +926,13 @@ async function initPaypalButtons() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ reservationId, paymentType })
         });
-        const data = await res.json();
-        if (!res.ok || !data.id) throw new Error(data.error || 'Erreur création commande PayPal.');
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.id) {
+          const detail = data.error || `HTTP ${res.status}`;
+          console.error('create-paypal-order a répondu :', detail);
+          window.__dernierePaypalErreur = detail;
+          throw new Error(detail);
+        }
         return data.id;
       },
       onApprove: async (data) => {
@@ -951,7 +956,11 @@ async function initPaypalButtons() {
         console.error('Erreur PayPal', err);
         document.getElementById('payment-loading').style.display = 'none';
         document.getElementById('payment-choice').style.display = 'block';
-        showPaymentError("Une erreur est survenue avec PayPal. Réessayez ou contactez le salon.");
+        const detail = window.__dernierePaypalErreur || (err && err.message) || '';
+        showPaymentError(
+          "Une erreur est survenue avec PayPal. Réessayez ou contactez le salon."
+          + (detail ? ` (détail technique : ${detail})` : '')
+        );
       }
     }).render('#paypal-button-container').then(() => {
       document.getElementById('paypal-loading').style.display = 'none';
