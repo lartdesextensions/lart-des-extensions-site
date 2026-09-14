@@ -1,3 +1,5 @@
+const { getDb } = require('./lib/turso');
+
 const PAYPAL_API = process.env.PAYPAL_API_BASE || 'https://api-m.paypal.com';
 
 async function getAccessToken() {
@@ -24,10 +26,32 @@ exports.handler = async function (event) {
   }
 
   try {
-    const { reservationId, amount, description } = JSON.parse(event.body);
-    if (!reservationId || !amount || amount <= 0) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Paramètres manquants ou invalides.' }) };
+    const { reservationId, paymentType } = JSON.parse(event.body);
+    if (!reservationId) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Paramètres manquants.' }) };
     }
+
+    // Le montant n'est JAMAIS repris du navigateur : il est recalculé depuis la base.
+    const type = paymentType === 'total' ? 'total' : 'acompte';
+    const db = getDb();
+    const lookup = await db.execute({
+      sql: 'SELECT prix, prestation_nom FROM reservations WHERE id = ?',
+      args: [reservationId]
+    });
+    const reservation = lookup.rows[0];
+    if (!reservation) {
+      return { statusCode: 404, body: JSON.stringify({ error: 'Réservation introuvable.' }) };
+    }
+
+    const prix = Number(reservation.prix);
+    if (!prix || prix <= 0) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Prix de la prestation invalide.' }) };
+    }
+    const amount = type === 'total' ? prix : Math.round(prix * 0.35);
+
+    const libelle = type === 'total'
+      ? `Prestation — ${reservation.prestation_nom}`
+      : `Acompte réservation — ${reservation.prestation_nom}`;
 
     const accessToken = await getAccessToken();
 
@@ -41,7 +65,7 @@ exports.handler = async function (event) {
         intent: 'CAPTURE',
         purchase_units: [{
           custom_id: String(reservationId),
-          description: `Acompte réservation — ${description || "L'Art des Extensions"}`,
+          description: libelle.slice(0, 127),
           amount: { currency_code: 'EUR', value: amount.toFixed(2) }
         }]
       })
