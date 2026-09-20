@@ -539,6 +539,7 @@ tr:hover td{background:var(--cream);}
   </div>
 </div>
 
+<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v3-rowAt</div>
 <script>
 const DEFAULT_ADMIN_PWD = 'Miamore10253!';
 
@@ -737,6 +738,13 @@ function reservationAbandonnee(r) {
   return true;
 }
 
+// Les données ne sont plus injectées dans l'attribut HTML : on n'y met qu'un
+// numéro de ligne. Plus aucun caractère spécial (apostrophe, guillemet, accent,
+// retour à la ligne) ne peut casser le clic.
+const __rows = [];
+function regRow(obj) { __rows.push(obj); return __rows.length - 1; }
+function rowAt(i) { return __rows[i]; }
+
 // Montant réellement encaissé en ligne : montant_paye si renseigné (paiement intégral
 // ou acompte), sinon l'acompte — pour les RDV créés à la main et l'historique.
 function encaisseEnLigne(r) {
@@ -826,7 +834,7 @@ function onNrClientSearch() {
     return;
   }
   box.innerHTML = matches.map(c => `
-    <div onclick='selectNrClient(${JSON.stringify(c)})' style="padding:10px 14px;border-top:1px solid var(--beige-mid);cursor:pointer;font-size:.85rem;">
+    <div onclick="selectNrClient(rowAt(${regRow(c)}))" style="padding:10px 14px;border-top:1px solid var(--beige-mid);cursor:pointer;font-size:.85rem;">
       <div style="font-weight:600;">${c.prenom} ${c.nom}</div>
       <div style="font-size:.75rem;color:var(--taupe-dark);">${c.telephone || ''}${c.telephone && c.email ? ' · ' : ''}${c.email || ''}</div>
     </div>`).join('');
@@ -1322,7 +1330,7 @@ async function loadAgenda() {
         groupBadge = `<span style="font-size:.7rem;color:var(--taupe-dark);background:var(--beige);border-radius:6px;padding:2px 6px;margin-left:6px;">${groupSeen[r.groupe_id]}/${groupCounts[r.groupe_id]}</span>`;
       }
       return `
-      <div style="background:var(--white);border:1px solid var(--beige-mid);border-left:4px solid ${getPrestationColor(r.prestation_nom)};border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;gap:16px;cursor:pointer;" onclick='openModal(${JSON.stringify(r)})'>
+      <div style="background:var(--white);border:1px solid var(--beige-mid);border-left:4px solid ${getPrestationColor(r.prestation_nom)};border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;gap:16px;cursor:pointer;" onclick="openModal(rowAt(${regRow(r)}))">
         <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;min-width:64px;">${r.heure}</div>
         <div style="flex:1;">
           <div style="font-weight:500;font-size:.9rem;">${r.prenom} ${r.nom}${groupBadge}</div>
@@ -1441,7 +1449,7 @@ function renderPlanning(data) {
       groupSeen[r.groupe_id] = (groupSeen[r.groupe_id] || 0) + 1;
       groupBadge = ` <span style="opacity:.75;">(${groupSeen[r.groupe_id]}/${groupCounts[r.groupe_id]})</span>`;
     }
-    return `<div class="planning-block" style="top:${top}px;height:${height}px;background:${color};border-left-color:var(--taupe-dark);" onclick='openModal(${JSON.stringify(r)})'>
+    return `<div class="planning-block" style="top:${top}px;height:${height}px;background:${color};border-left-color:var(--taupe-dark);" onclick="openModal(rowAt(${regRow(r)}))">
       <div class="planning-block-name">${r.prenom} ${r.nom}${groupBadge}</div>
       <div class="planning-block-meta">${r.prestation_nom}</div>
       <div class="planning-block-meta">${r.heure} - ${endStr} · ${r.prix} €</div>
@@ -1453,7 +1461,7 @@ function renderPlanning(data) {
     const end = timeToMin(b.heure_fin);
     const top = (start - minStart) * PX_PER_MIN;
     const height = Math.max((end - start) * PX_PER_MIN, 24);
-    return `<div class="planning-block planning-blocage" style="top:${top}px;height:${height}px;" onclick='showBlocageInfo(${JSON.stringify(b)})'>
+    return `<div class="planning-block planning-blocage" style="top:${top}px;height:${height}px;" onclick="showBlocageInfo(rowAt(${regRow(b)}))">
       <div class="planning-block-name">⛔ ${b.motif || 'Indisponible'}</div>
       <div class="planning-block-meta">${b.heure_debut} - ${b.heure_fin}</div>
     </div>`;
@@ -1505,7 +1513,7 @@ async function loadReservations() {
     <td><strong>${r.prenom} ${r.nom}</strong><br><span style="font-size:.72rem;color:var(--taupe-dark);">${r.email}</span></td>
     <td>${r.prestation_nom}</td><td>${r.prix} €</td>
     <td>${badgeHtml(r.statut)}</td>
-    <td><button class="action-btn" onclick='openModal(${JSON.stringify(r)})'>Voir</button></td>
+    <td><button class="action-btn" onclick="openModal(rowAt(${regRow(r)}))">Voir</button></td>
   </tr>`).join('');
 }
 
@@ -1982,7 +1990,7 @@ async function loadPrestations() {
         <td>${p.nom}</td><td>${p.prix} €</td><td>${formatDur(p.duree_min)}</td>
         <td>${p.actif ? '✓' : '—'}</td>
         <td>
-          <button class="action-btn" onclick='editPrest(${JSON.stringify(p)})'>Modifier</button>
+          <button class="action-btn" onclick="editPrest(rowAt(${regRow(p)}))">Modifier</button>
           <button class="action-btn red" onclick="togglePrest(${p.id}, ${p.actif})">${p.actif ? 'Désactiver' : 'Activer'}</button>
         </td>
       </tr>`).join('');
@@ -2093,7 +2101,7 @@ function renderClientsList() {
       <td style="padding:10px 14px;">${c.prenom} ${c.nom}</td>
       <td style="padding:10px 14px;">${c.telephone || '—'}</td>
       <td style="padding:10px 14px;">${c.email || '—'}</td>
-      <td style="padding:10px 14px;"><button class="action-btn" onclick='editClient(${JSON.stringify(c)})'>Modifier</button></td>
+      <td style="padding:10px 14px;"><button class="action-btn" onclick="editClient(rowAt(${regRow(c)}))">Modifier</button></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
