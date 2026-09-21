@@ -26,11 +26,29 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
 .topbar{background:var(--dark);color:var(--white);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;}
 .topbar-title{font-family:'Cormorant Garamond',serif;font-size:1.1rem;letter-spacing:.05em;}
 .topbar-right{display:flex;gap:12px;align-items:center;}
+.cloche{position:relative;background:none;border:none;color:var(--white);cursor:pointer;padding:6px;display:flex;align-items:center;border-radius:8px;}
+.cloche:hover{background:rgba(255,255,255,.1);}
+.cloche.sonne svg{animation:sonner .9s ease-in-out 2;transform-origin:top center;}
+@keyframes sonner{0%,100%{transform:rotate(0)}20%{transform:rotate(14deg)}40%{transform:rotate(-12deg)}60%{transform:rotate(8deg)}80%{transform:rotate(-4deg)}}
+.cloche-pastille{display:none;position:absolute;top:0;right:0;min-width:17px;height:17px;padding:0 4px;box-sizing:border-box;background:#E53935;color:#fff;border-radius:9px;font-size:.62rem;font-weight:700;line-height:17px;text-align:center;font-family:'Poppins',sans-serif;}
+.cloche-panneau{display:none;position:fixed;top:58px;right:12px;width:360px;max-width:calc(100vw - 24px);max-height:70vh;overflow-y:auto;background:var(--white);border:1px solid var(--beige-mid);border-radius:14px;box-shadow:0 12px 36px rgba(0,0,0,.18);z-index:150;}
+.cloche-panneau.ouvert{display:block;}
+.cp-tete{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--beige-mid);font-family:'Cormorant Garamond',serif;font-size:1.15rem;position:sticky;top:0;background:var(--white);}
+.cp-fermer{border:none;background:none;font-size:1rem;color:var(--taupe-dark);cursor:pointer;padding:4px 6px;}
+.cp-sec{font-size:.66rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--taupe-dark);padding:12px 16px 6px;}
+.cp-item{display:block;width:100%;text-align:left;border:none;background:none;padding:10px 16px;border-top:1px solid var(--beige);cursor:pointer;font-family:'Poppins',sans-serif;}
+.cp-item:hover{background:var(--cream);}
+.cp-item.nouveau{background:#FBF6EF;}
+.cp-l1{display:flex;justify-content:space-between;gap:8px;font-size:.85rem;font-weight:600;color:var(--dark);}
+.cp-l2{font-size:.74rem;color:var(--taupe-dark);margin-top:2px;line-height:1.4;}
+.cp-badge{display:inline-block;font-size:.58rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:#E53935;color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:middle;}
+.cp-vide{padding:26px 16px;text-align:center;font-size:.85rem;color:var(--taupe);}
 .btn-sm{padding:7px 14px;border-radius:6px;font-size:.75rem;font-weight:500;cursor:pointer;border:none;font-family:'Poppins',sans-serif;}
 .btn-logout{background:transparent;color:#ccc;border:1px solid #555;}
 .btn-logout:hover{border-color:#fff;color:#fff;}
 
 .layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 50px);}
+.layout>*{min-width:0;}
 @media(max-width:700px){.layout{grid-template-columns:1fr;}}
 
 /* SIDEBAR */
@@ -42,6 +60,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
 
 /* CONTENT */
 .content{padding:28px;}
+@media(max-width:600px){.content{padding:18px 14px;}}
 .content-title{font-family:'Cormorant Garamond',serif;font-size:1.5rem;margin-bottom:4px;}
 .content-sub{font-size:.78rem;color:var(--taupe-dark);margin-bottom:24px;}
 
@@ -57,7 +76,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
 .stat-label{font-size:.72rem;color:var(--taupe-dark);margin-top:4px;}
 
 /* TABLE */
-.table-wrap{background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;overflow:hidden;}
+.table-wrap{background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
 table{width:100%;border-collapse:collapse;font-size:.82rem;}
 thead{background:var(--beige);}
 th{padding:12px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);font-weight:600;}
@@ -197,8 +216,20 @@ tr:hover td{background:var(--cream);}
 <div class="topbar">
   <span class="topbar-title">L'Art des Extensions — Admin</span>
   <div class="topbar-right">
+    <button class="cloche" id="cloche" onclick="basculerCloche(event)" aria-label="Notifications">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      <span class="cloche-pastille" id="cloche-pastille"></span>
+    </button>
     <button class="btn-sm btn-logout" onclick="logout()">Déconnexion</button>
   </div>
+</div>
+
+<div class="cloche-panneau" id="cloche-panneau">
+  <div class="cp-tete">
+    <span>Notifications</span>
+    <button class="cp-fermer" onclick="fermerCloche()" aria-label="Fermer">✕</button>
+  </div>
+  <div id="cloche-contenu"><div class="cp-vide">Chargement…</div></div>
 </div>
 
 <div class="layout">
@@ -227,6 +258,15 @@ tr:hover td{background:var(--cream);}
         <div class="dash-tab" data-p="semaine" onclick="setDashPeriod('semaine')" style="flex:1;text-align:center;padding:9px 4px;border-radius:8px;font-size:.82rem;cursor:pointer;color:var(--taupe-dark);">Semaine</div>
         <div class="dash-tab" data-p="mois" onclick="setDashPeriod('mois')" style="flex:1;text-align:center;padding:9px 4px;border-radius:8px;font-size:.82rem;cursor:pointer;color:var(--taupe-dark);">Mois</div>
         <div class="dash-tab" data-p="annee" onclick="setDashPeriod('annee')" style="flex:1;text-align:center;padding:9px 4px;border-radius:8px;font-size:.82rem;cursor:pointer;color:var(--taupe-dark);">Année</div>
+      </div>
+
+      <div id="relance-box" style="display:none;background:var(--white);border:1px solid var(--beige-mid);border-left:3px solid var(--taupe);border-radius:0 10px 10px 0;padding:14px 16px;margin-bottom:22px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px;">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:1.2rem;">À relancer</div>
+          <div id="relance-count" style="font-size:.75rem;font-weight:600;background:var(--dark);color:var(--white);border-radius:20px;padding:2px 10px;"></div>
+        </div>
+        <div style="font-size:.75rem;color:var(--taupe-dark);margin-bottom:10px;">Bandes posées ou entretenues il y a plus de 75 jours, sans rendez-vous à venir</div>
+        <div id="relance-list"></div>
       </div>
 
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
@@ -602,76 +642,118 @@ tr:hover td{background:var(--cream);}
   </div>
 </div>
 
-<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v4-fiche</div>
+<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v7-cloche</div>
 <script>
-const DEFAULT_ADMIN_PWD = 'Miamore10253!';
-
 // ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify sécurisée) ──
+// Chaque demande présente la session admin. Sans elle, le serveur refuse tout
+// accès aux données des clientes.
+function authHeaders(extra) {
+  const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+  const t = getAdminToken();
+  if (t) h.Authorization = 'Bearer ' + t;
+  return h;
+}
+
 async function dbCall(table, action, opts) {
   opts = opts || {};
   const res = await fetch('/.netlify/functions/db', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(Object.assign({ table, action }, opts))
   });
-  const json = await res.json();
+  const json = await res.json().catch(() => ({}));
+  if (res.status === 401 && getAdminToken()) {
+    sessionExpiree();
+    throw new Error('Session expirée');
+  }
   if (!res.ok) throw new Error(json.error || 'Erreur base de données');
   return json;
-}
-
-async function getStoredAdminPwd() {
-  try {
-    const { data } = await dbCall('settings', 'select', {
-      filters: [{ col: 'key', op: 'eq', value: 'admin_password' }],
-      single: true
-    });
-    return (data && data.value) ? data.value : DEFAULT_ADMIN_PWD;
-  } catch (e) {
-    return DEFAULT_ADMIN_PWD;
-  }
 }
 
 // ── AUTH ──
 async function login() {
   const entered = document.getElementById('pwd').value;
   const btn = document.querySelector('.login-box .btn');
+  const err = document.getElementById('login-err');
+  err.style.display = 'none';
   if (btn) btn.disabled = true;
-  const currentPwd = await getStoredAdminPwd();
-  if (btn) btn.disabled = false;
-  if (entered === currentPwd) {
-    setAdminSession();
+  try {
+    const res = await fetch('/.netlify/functions/admin-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: entered })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.token) {
+      err.style.display = 'block';
+      return;
+    }
+    setAdminSession(data.token, data.exp);
+    document.getElementById('pwd').value = '';
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     initApp();
-  } else {
-    document.getElementById('login-err').style.display = 'block';
+    if (data.mustChange) exigerChangementMdp();
+  } catch (e) {
+    err.style.display = 'block';
+  } finally {
+    if (btn) btn.disabled = false;
   }
+}
+
+// Ancien mot de passe potentiellement exposé : on amène directement au changement
+function exigerChangementMdp() {
+  setTimeout(() => {
+    try { showSection('parametres'); } catch (e) {}
+    alert('Par sécurité, choisis maintenant un nouveau mot de passe (8 caractères minimum). Ton mot de passe actuel a pu être visible avant cette mise à jour.');
+    const f = document.getElementById('pw-current');
+    if (f) f.focus();
+  }, 300);
 }
 // Session conservée 30 jours dans localStorage : sessionStorage était vidé
 // dès que Safari déchargeait l'onglet en arrière-plan, d'où les reconnexions
 // permanentes sur iPhone.
-const ADMIN_SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
-function setAdminSession() {
+function setAdminSession(token, exp) {
   try {
-    localStorage.setItem('admin_session', String(Date.now() + ADMIN_SESSION_MS));
-  } catch (e) {
-    sessionStorage.setItem('admin', '1'); // secours si le stockage est refusé
-  }
+    localStorage.setItem('admin_token', token);
+    localStorage.setItem('admin_token_exp', String(exp));
+  } catch (e) { /* stockage refusé : la session durera le temps de l'onglet */ }
+  window.__adminToken = token;
+}
+
+function getAdminToken() {
+  if (window.__adminToken) return window.__adminToken;
+  try {
+    const t = localStorage.getItem('admin_token');
+    const exp = Number(localStorage.getItem('admin_token_exp'));
+    if (t && exp && Date.now() < exp) return t;
+  } catch (e) {}
+  return null;
 }
 
 function adminSessionValide() {
+  return !!getAdminToken();
+}
+
+function clearAdminSession() {
+  window.__adminToken = null;
   try {
-    const exp = Number(localStorage.getItem('admin_session'));
-    if (exp && Date.now() < exp) return true;
-    if (exp) localStorage.removeItem('admin_session');
-  } catch (e) { /* stockage indisponible */ }
-  return sessionStorage.getItem('admin') === '1';
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_token_exp');
+    localStorage.removeItem('admin_session'); // ancien format
+  } catch (e) {}
+  sessionStorage.removeItem('admin');
+}
+
+function sessionExpiree() {
+  clearAdminSession();
+  alert('Ta session a expiré, reconnecte-toi.');
+  location.reload();
 }
 
 function logout() {
-  try { localStorage.removeItem('admin_session'); } catch (e) {}
-  sessionStorage.removeItem('admin');
+  clearAdminSession();
   location.reload();
 }
 
@@ -681,15 +763,9 @@ async function changePassword() {
   const confirm = document.getElementById('pw-confirm').value;
   const msg = document.getElementById('pw-msg');
 
-  const currentPwd = await getStoredAdminPwd();
-  if (current !== currentPwd) {
+  if (!next || next.length < 8) {
     msg.className = 'msg msg-err';
-    msg.textContent = 'Mot de passe actuel incorrect.';
-    return;
-  }
-  if (!next || next.length < 6) {
-    msg.className = 'msg msg-err';
-    msg.textContent = 'Le nouveau mot de passe doit contenir au moins 6 caractères.';
+    msg.textContent = 'Le nouveau mot de passe doit contenir au moins 8 caractères.';
     return;
   }
   if (next !== confirm) {
@@ -698,14 +774,23 @@ async function changePassword() {
     return;
   }
 
+  // Vérification et enregistrement côté serveur : le mot de passe n'est plus
+  // jamais lu par la page.
   try {
-    await dbCall('settings', 'upsert', {
-      payload: { key: 'admin_password', value: next },
-      onConflict: 'key'
+    const res = await fetch('/.netlify/functions/admin-password', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ current, next })
     });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      msg.className = 'msg msg-err';
+      msg.textContent = data.error || 'Changement impossible.';
+      return;
+    }
   } catch (e) {
     msg.className = 'msg msg-err';
-    msg.textContent = 'Erreur : ' + e.message;
+    msg.textContent = 'Changement impossible pour le moment.';
     return;
   }
 
@@ -713,7 +798,7 @@ async function changePassword() {
   document.getElementById('pw-new').value = '';
   document.getElementById('pw-confirm').value = '';
   msg.className = 'msg msg-ok';
-  msg.textContent = 'Mot de passe changé avec succès.';
+  msg.textContent = 'Mot de passe changé.';
 }
 
 // ── NAV ──
@@ -731,6 +816,149 @@ function showSection(id) {
 }
 
 // ── INIT ──
+// ── CLOCHE DE NOTIFICATIONS ──
+// Deux sources : les réservations payées en ligne arrivées depuis ta dernière
+// consultation, et les clientes à relancer. La pastille ne compte que ce que tu
+// n'as pas encore vu ; ouvrir la cloche la remet à zéro.
+let clocheRdvs = [];
+
+function clocheLire(k, def) {
+  try { const v = JSON.parse(localStorage.getItem(k)); return v === null ? def : v; } catch (e) { return def; }
+}
+function clocheEcrire(k, v) {
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {}
+}
+
+function dateCreation(r) {
+  if (!r.created_at) return 0;
+  const brut = String(r.created_at).replace(' ', 'T');
+  const t = new Date(/[zZ]$|[+-]\d\d:?\d\d$/.test(brut) ? brut : brut + 'Z').getTime();
+  return isNaN(t) ? 0 : t;
+}
+
+function estPayeeEnLigne(r) {
+  return r.payment_method === 'stripe' || r.payment_method === 'paypal';
+}
+
+function etatCloche() {
+  let vuLe = clocheLire('cloche_vu_le', null);
+  if (vuLe === null) { vuLe = Date.now(); clocheEcrire('cloche_vu_le', vuLe); }
+  const relVues = clocheLire('cloche_relances_vues', []);
+  const ilYa7j = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+  const recentes = clocheRdvs
+    .filter(r => estPayeeEnLigne(r) && dateCreation(r) > ilYa7j)
+    .sort((a, b) => dateCreation(b) - dateCreation(a));
+  const relances = calculerRelances(clocheRdvs);
+
+  const nbNouvRdv = recentes.filter(r => dateCreation(r) > vuLe).length;
+  const nbNouvRel = relances.filter(c => !relVues.includes(c.cle)).length;
+  return { vuLe, relVues, recentes, relances, total: nbNouvRdv + nbNouvRel };
+}
+
+async function rafraichirCloche(recharger) {
+  if (recharger || !clocheRdvs.length) {
+    try {
+      const { data } = await dbCall('reservations', 'select', {
+        filters: [{ col: 'statut', op: 'neq', value: 'annule' }]
+      });
+      clocheRdvs = data || [];
+    } catch (e) { return; }
+  }
+  const { total } = etatCloche();
+  const pastille = document.getElementById('cloche-pastille');
+  const avant = Number(pastille.dataset.n || 0);
+  pastille.textContent = total > 9 ? '9+' : String(total);
+  pastille.style.display = total ? 'block' : 'none';
+  pastille.dataset.n = String(total);
+  if (total > avant) {
+    const c = document.getElementById('cloche');
+    c.classList.remove('sonne'); void c.offsetWidth; c.classList.add('sonne');
+  }
+}
+
+function renderCloche() {
+  const { vuLe, relVues, recentes, relances } = etatCloche();
+  const box = document.getElementById('cloche-contenu');
+  if (!recentes.length && !relances.length) {
+    box.innerHTML = '<div class="cp-vide">Rien de nouveau pour le moment.</div>';
+    return;
+  }
+  let html = '';
+  if (recentes.length) {
+    html += '<div class="cp-sec">Réservations en ligne · 7 derniers jours</div>';
+    html += recentes.map(r => {
+      const nouveau = dateCreation(r) > vuLe;
+      const paye = encaisseEnLigne(r);
+      return `<button class="cp-item${nouveau ? ' nouveau' : ''}" onclick="clocheOuvrirRdv(rowAt(${regRow(r)}))">
+        <div class="cp-l1"><span>${escHtml(r.prenom)} ${escHtml(r.nom)}${nouveau ? '<span class="cp-badge">Nouveau</span>' : ''}</span><span>${paye} €</span></div>
+        <div class="cp-l2">${fmtDateFR(r.date)} à ${escHtml(r.heure)} · ${escHtml(r.prestation_nom)}</div>
+      </button>`;
+    }).join('');
+  }
+  if (relances.length) {
+    html += `<div class="cp-sec">À relancer · ${relances.length}</div>`;
+    html += relances.map(c => {
+      const nouveau = !relVues.includes(c.cle);
+      return `<button class="cp-item${nouveau ? ' nouveau' : ''}" onclick="clocheVoirRelances()">
+        <div class="cp-l1"><span>${escHtml(c.prenom)} ${escHtml(c.nom)}${nouveau ? '<span class="cp-badge">Nouveau</span>' : ''}</span><span style="color:var(--error);">${c.jours} j</span></div>
+        <div class="cp-l2">Dernière visite le ${fmtDateFR(c.dernier.date)}</div>
+      </button>`;
+    }).join('');
+  }
+  box.innerHTML = html;
+}
+
+function marquerClocheVue() {
+  const { relances } = etatCloche();
+  clocheEcrire('cloche_vu_le', Date.now());
+  clocheEcrire('cloche_relances_vues', relances.map(c => c.cle));
+  const pastille = document.getElementById('cloche-pastille');
+  pastille.style.display = 'none';
+  pastille.dataset.n = '0';
+}
+
+async function basculerCloche(ev) {
+  if (ev) ev.stopPropagation();
+  const panneau = document.getElementById('cloche-panneau');
+  if (panneau.classList.contains('ouvert')) { fermerCloche(); return; }
+  panneau.classList.add('ouvert');
+  await rafraichirCloche(true);
+  renderCloche();      // affiche d'abord les « Nouveau »…
+  marquerClocheVue();  // …puis les considère comme vus
+}
+
+function fermerCloche() {
+  document.getElementById('cloche-panneau').classList.remove('ouvert');
+}
+
+function clocheOuvrirRdv(r) {
+  fermerCloche();
+  openModal(r);
+}
+
+function clocheVoirRelances() {
+  fermerCloche();
+  showSection('dashboard');
+  setTimeout(() => {
+    const b = document.getElementById('relance-box');
+    if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 150);
+}
+
+document.addEventListener('click', (e) => {
+  const panneau = document.getElementById('cloche-panneau');
+  if (!panneau || !panneau.classList.contains('ouvert')) return;
+  if (panneau.contains(e.target) || document.getElementById('cloche').contains(e.target)) return;
+  fermerCloche();
+});
+
+// Mise à jour toutes les 5 minutes, et dès que tu reviens sur l'admin
+setInterval(() => { if (adminSessionValide()) rafraichirCloche(true); }, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && adminSessionValide()) rafraichirCloche(true);
+});
+
 async function initApp() {
   const now = new Date();
   const opts = { weekday:'long', day:'numeric', month:'long', year:'numeric' };
@@ -739,6 +967,7 @@ async function initApp() {
   adminMonth = now.getMonth();
   await loadDashboard();
   renderAdminCal();
+  rafraichirCloche(true);
 }
 
 // ── DASHBOARD ──
@@ -851,6 +1080,94 @@ async function renderDashboardStats() {
   }
 }
 
+// ── À RELANCER : bandes adhésives sans entretien depuis 75 jours ──
+const RELANCE_JOURS = 75;
+
+function estPrestationBandes(nomComplet) {
+  // Une dépose seule ne demande pas d'entretien : on ne relance que s'il y a eu
+  // pose ou entretien de bandes (classiques ou injectées).
+  return String(nomComplet || '').split(' + ').some(part =>
+    /bande/i.test(part) && !/^\s*d[ée]pose/i.test(part)
+  );
+}
+
+function cleClienteRdv(r) {
+  const e = (r.email || '').trim().toLowerCase();
+  if (e) return 'e:' + e;
+  const t = String(r.telephone || '').replace(/\D/g, '').replace(/^33/, '0');
+  return t.length >= 9 ? 't:' + t : null;
+}
+
+function relancesMasquees() {
+  try { return JSON.parse(localStorage.getItem('relances_masquees') || '{}'); } catch (e) { return {}; }
+}
+
+function masquerRelance(cle) {
+  const m = relancesMasquees();
+  m[cle] = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  try { localStorage.setItem('relances_masquees', JSON.stringify(m)); } catch (e) {}
+  renderRelances();
+  if (typeof rafraichirCloche === 'function') rafraichirCloche();
+}
+
+function calculerRelances(rdvs) {
+  const today = fmtDate(new Date());
+  const masquees = relancesMasquees();
+  const parCliente = {};
+
+  for (const r of (rdvs || [])) {
+    if (r.statut === 'annule' || reservationAbandonnee(r)) continue;
+    const cle = cleClienteRdv(r);
+    if (!cle) continue;
+    const c = parCliente[cle] = parCliente[cle] || { futur: false, dernier: null, telephone: '', prenom: '', nom: '' };
+    if (r.date >= today) { c.futur = true; continue; }
+    if (!estPrestationBandes(r.prestation_nom)) continue;
+    if (!c.dernier || r.date > c.dernier.date) {
+      c.dernier = r;
+      c.telephone = r.telephone || c.telephone;
+      c.prenom = r.prenom || c.prenom;
+      c.nom = r.nom || c.nom;
+    }
+  }
+
+  const now = new Date(today + 'T12:00:00');
+  return Object.entries(parCliente)
+    .filter(([cle, c]) => c.dernier && !c.futur && !(masquees[cle] && masquees[cle] > Date.now()))
+    .map(([cle, c]) => ({ cle, ...c, jours: Math.round((now - new Date(c.dernier.date + 'T12:00:00')) / 86400000) }))
+    .filter(c => c.jours >= RELANCE_JOURS)
+    .sort((a, b) => b.jours - a.jours);
+}
+
+function renderRelances() {
+  const box = document.getElementById('relance-box');
+  if (!box || !dashAllRdvs) return;
+  const liste = calculerRelances(dashAllRdvs);
+  if (!liste.length) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  document.getElementById('relance-count').textContent = liste.length;
+
+  document.getElementById('relance-list').innerHTML = liste.map(c => {
+    const semaines = Math.floor(c.jours / 7);
+    const tel = String(c.telephone || '').replace(/\s/g, '');
+    const texte = `Bonjour ${c.prenom}, ici L'Art des Extensions. Votre dernier entretien remonte à ${semaines} semaines : pensez à reprendre rendez-vous pour garder vos bandes en parfait état. Réservation : lartdesextensions.fr`;
+    const liens = tel
+      ? `<a href="tel:${escHtml(tel)}" class="action-btn" style="text-decoration:none;">📞 Appeler</a>
+         <a href="sms:${escHtml(tel)}&body=${encodeURIComponent(texte)}" class="action-btn" style="text-decoration:none;">💬 SMS</a>`
+      : '';
+    return `<div style="padding:10px 0;border-top:1px solid var(--beige);">
+      <div style="display:flex;justify-content:space-between;gap:8px;font-size:.88rem;">
+        <strong>${escHtml(c.prenom)} ${escHtml(c.nom)}</strong>
+        <span style="color:var(--error);font-weight:600;white-space:nowrap;">${c.jours} jours</span>
+      </div>
+      <div style="font-size:.74rem;color:var(--taupe-dark);margin:2px 0 8px;">Dernière visite le ${fmtDateFR(c.dernier.date)} · ${escHtml(c.dernier.prestation_nom)}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${liens}
+        <button class="action-btn" onclick="masquerRelance('${escHtml(c.cle)}')">Masquer 30 jours</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 async function loadDashboard() {
   const today = fmtDate(new Date());
 
@@ -861,6 +1178,7 @@ async function loadDashboard() {
   if (!rdvs) return;
   dashAllRdvs = rdvs.filter(r => !reservationAbandonnee(r));
   await renderDashboardStats();
+  renderRelances();
 
   const upcoming = rdvs.filter(r => r.date >= today).slice(0, 10);
   const tbody = document.getElementById('upcoming-list');
@@ -1285,7 +1603,7 @@ async function saveNewRdv() {
   try {
     await fetch('/.netlify/functions/upsert-client', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(),
       body: JSON.stringify({ prenom, nom, telephone: tel, email })
     });
     nrClients = []; // force le rechargement de la liste au prochain modal
@@ -1297,7 +1615,7 @@ async function saveNewRdv() {
     try {
       const res = await fetch('/.netlify/functions/send-confirmation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ reservationId: newReservationId })
       });
       const data = await res.json().catch(() => ({}));
@@ -1643,7 +1961,7 @@ async function finalizeCancel(remboursed) {
       try {
         const res = await fetch('/.netlify/functions/refund', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders(),
           body: JSON.stringify({ reservationId: currentRdv.id })
         });
         const data = await res.json();
