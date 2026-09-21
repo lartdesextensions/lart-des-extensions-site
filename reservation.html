@@ -110,8 +110,6 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
 .pay-opt.active .pay-opt-t{color:var(--dark);}
 .pay-opt-a{font-size:1.15rem;font-weight:600;color:var(--dark);}
 .pay-opt-s{font-size:.68rem;color:var(--taupe-dark);line-height:1.35;}
-.pay-hint{display:none;font-size:.76rem;line-height:1.5;color:var(--brown);background:var(--beige);border-left:3px solid var(--taupe);border-radius:6px;padding:11px 13px;margin:-6px 0 16px;}
-.pay-hint strong{font-weight:600;color:var(--dark);}
 
 /* CHOIX DU MOYEN DE PAIEMENT */
 .pm-head{font-family:'Cormorant Garamond',serif;font-size:1.15rem;color:var(--dark);margin:4px 0 14px;display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
@@ -119,7 +117,6 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
 .pay-method{display:flex;align-items:center;gap:14px;width:100%;padding:15px 16px;margin-bottom:10px;background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;cursor:pointer;font-family:'Poppins',sans-serif;text-align:left;transition:border-color .2s,box-shadow .2s;}
 .pay-method:hover{border-color:var(--dark);box-shadow:0 2px 10px rgba(0,0,0,.06);}
 .pm-ico{flex:0 0 54px;text-align:center;font-size:1.4rem;line-height:1;}
-.pm-ico-pp{font-size:.82rem;font-weight:700;font-style:italic;color:#003087;}
 .pm-txt{display:flex;flex-direction:column;gap:2px;}
 .pm-t{font-size:.9rem;font-weight:600;color:var(--dark);}
 .pm-s{font-size:.72rem;color:var(--taupe-dark);line-height:1.35;}
@@ -255,7 +252,6 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
             <span class="pay-opt-s">Rien à régler sur place</span>
           </button>
         </div>
-        <div class="pay-hint" id="pay-hint"></div>
         <div class="note-box" id="note-paiement"></div>
         <button class="btn" id="btn-payer" onclick="showPaymentMethods()">Payer <span id="btn-payer-amt"></span></button>
       </div>
@@ -273,14 +269,6 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
             </span>
           </button>
 
-          <button type="button" class="pay-method" id="pm-paypal" onclick="choosePaypal()">
-            <span class="pm-ico pm-ico-pp">PayPal</span>
-            <span class="pm-txt">
-              <span class="pm-t">PayPal</span>
-              <span class="pm-s" id="pm-paypal-sub">Payez avec votre compte PayPal</span>
-            </span>
-          </button>
-
           <button type="button" class="pay-method" id="pm-card" onclick="payWithStripe()">
             <span class="pm-ico">💳</span>
             <span class="pm-txt">
@@ -288,14 +276,6 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
               <span class="pm-s">Visa, Mastercard, CB</span>
             </span>
           </button>
-        </div>
-
-        <div id="paypal-wrap" style="display:none;">
-          <div class="pm-head" style="margin-top:0;">Poursuivre avec PayPal</div>
-          <div id="paypal-button-container"></div>
-          <div id="paypal-loading" style="text-align:center;padding:14px;color:var(--taupe-dark);font-size:.8rem;">
-            <div class="spinner" style="width:20px;height:20px;margin:0 auto 8px;"></div>Chargement de PayPal...
-          </div>
         </div>
 
         <button class="btn btn-outline" style="margin-top:16px;" onclick="backToAmount()">← Retour</button>
@@ -720,7 +700,6 @@ async function checkBlockedAndProceed() {
 // ── RECAP ──
 const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 let currentReservationId = null;
-let paypalButtonsRendered = false;
 let appConfig = null;
 let paymentType = 'acompte'; // 'acompte' (35 %) ou 'total'
 
@@ -731,7 +710,7 @@ async function getAppConfig() {
     appConfig = await res.json();
   } catch (e) {
     console.error('Erreur chargement config paiement', e);
-    appConfig = { stripePublishableKey: '', paypalClientId: '' };
+    appConfig = { stripePublishableKey: '' };
   }
   return appConfig;
 }
@@ -776,26 +755,6 @@ function setPaymentType(type) {
   document.getElementById('note-paiement').innerHTML = paymentType === 'total'
     ? `✓ Vous réglez l'intégralité de votre prestation (${p.prix} €). Rien à régler le jour du rendez-vous.`
     : `⚠️ Un acompte de 35 % (${montant} €) est demandé pour confirmer votre réservation. Le solde de ${p.prix - montant} € sera à régler au salon.`;
-
-  // Le 4X PayPal n'existe qu'entre 20 € et 3 000 € (et reste soumis à l'accord de PayPal)
-  const sub = document.getElementById('pm-paypal-sub');
-  if (sub) {
-    sub.textContent = (montant >= 20 && montant <= 3000)
-      ? 'Paiement en 4 fois possible, sous réserve d’acceptation'
-      : 'Payez avec votre compte PayPal';
-  }
-
-  // Rappel : le paiement en 4 fois ne porte que sur le montant réglé en ligne
-  const hint = document.getElementById('pay-hint');
-  if (hint) {
-    const eligibleTotal = p.prix >= 20 && p.prix <= 3000;
-    if (paymentType === 'acompte' && eligibleTotal) {
-      hint.innerHTML = `💡 Vous souhaitez payer en plusieurs fois ? Choisissez <strong>Totalité</strong> : le paiement en 4 fois PayPal ne s'applique qu'au montant réglé en ligne. En restant sur l'acompte, seuls les ${montant} € seraient étalés.`;
-      hint.style.display = 'block';
-    } else {
-      hint.style.display = 'none';
-    }
-  }
 }
 
 // ── NAVIGATION MONTANT → MOYEN DE PAIEMENT ──
@@ -804,7 +763,6 @@ function showPaymentMethods() {
   document.getElementById('pay-step-amount').style.display = 'none';
   document.getElementById('pay-step-method').style.display = 'block';
   document.getElementById('pm-list').style.display = 'block';
-  document.getElementById('paypal-wrap').style.display = 'none';
 
   // Apple Pay n'est proposé que si l'appareil le prend réellement en charge
   const appleOk = window.ApplePaySession && window.ApplePaySession.canMakePayments();
@@ -820,11 +778,6 @@ function backToAmount() {
   document.getElementById('payment-loading').style.display = 'none';
 }
 
-function choosePaypal() {
-  document.getElementById('pm-list').style.display = 'none';
-  document.getElementById('paypal-wrap').style.display = 'block';
-  initPaypalButtons();
-}
 
 // Enregistre la réservation une seule fois (statut "en_attente" tant que l'acompte n'est pas payé)
 async function ensureReservationSaved() {
@@ -900,78 +853,6 @@ async function payWithStripe() {
     showPaymentMethods();
     showPaymentError("Le paiement n'a pas pu être initié. Réessayez ou contactez le salon.");
   }
-}
-
-// ── PAIEMENT PAYPAL ──
-async function initPaypalButtons() {
-  if (paypalButtonsRendered) return;
-  const config = await getAppConfig();
-  if (!config.paypalClientId) {
-    console.warn('PayPal non configuré (PAYPAL_CLIENT_ID manquant).');
-    document.getElementById('paypal-loading').style.display = 'none';
-    showPaymentError("PayPal est momentanément indisponible. Réessayez par carte.");
-    return;
-  }
-
-  const script = document.createElement('script');
-  script.src = `https://www.paypal.com/sdk/js?client-id=${config.paypalClientId}&currency=EUR&components=buttons&enable-funding=paylater`;
-  script.onload = () => {
-    paypal.Buttons({
-      style: { layout: 'vertical', color: 'gold', label: 'paypal', height: 45 },
-      createOrder: async () => {
-        document.getElementById('payment-msg').style.display = 'none';
-        const reservationId = await ensureReservationSaved();
-        const res = await fetch('/.netlify/functions/create-paypal-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reservationId, paymentType })
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.id) {
-          const detail = data.error || `HTTP ${res.status}`;
-          console.error('create-paypal-order a répondu :', detail);
-          window.__dernierePaypalErreur = detail;
-          throw new Error(detail);
-        }
-        return data.id;
-      },
-      onApprove: async (data) => {
-        document.getElementById('payment-loading').style.display = 'block';
-        document.getElementById('payment-choice').style.display = 'none';
-        const res = await fetch('/.netlify/functions/capture-paypal-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderID: data.orderID, reservationId: currentReservationId })
-        });
-        const result = await res.json();
-        if (!res.ok || !result.success) {
-          document.getElementById('payment-loading').style.display = 'none';
-          document.getElementById('payment-choice').style.display = 'block';
-          showPaymentError("Le paiement PayPal n'a pas pu être finalisé. Contactez le salon.");
-          return;
-        }
-        showSuccessPanel();
-      },
-      onError: (err) => {
-        console.error('Erreur PayPal', err);
-        document.getElementById('payment-loading').style.display = 'none';
-        document.getElementById('payment-choice').style.display = 'block';
-        const detail = window.__dernierePaypalErreur || (err && err.message) || '';
-        showPaymentError(
-          "Une erreur est survenue avec PayPal. Réessayez ou contactez le salon."
-          + (detail ? ` (détail technique : ${detail})` : '')
-        );
-      }
-    }).render('#paypal-button-container').then(() => {
-      document.getElementById('paypal-loading').style.display = 'none';
-    });
-    paypalButtonsRendered = true;
-  };
-  script.onerror = () => {
-    document.getElementById('paypal-loading').style.display = 'none';
-    showPaymentError("PayPal n'a pas pu être chargé. Réessayez par carte.");
-  };
-  document.head.appendChild(script);
 }
 
 function showSuccessPanel() {
