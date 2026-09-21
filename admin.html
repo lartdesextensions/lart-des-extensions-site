@@ -148,6 +148,35 @@ tr:hover td{background:var(--cream);}
 .modal{background:var(--white);border-radius:14px;padding:28px;width:380px;max-width:95vw;max-height:none;margin:auto 0;}
 .modal-title{font-family:'Cormorant Garamond',serif;font-size:1.2rem;margin-bottom:16px;}
 .modal-actions{display:flex;gap:10px;margin-top:20px;}
+
+/* FICHE CLIENTE */
+#modal-client .modal{width:520px;}
+.cs-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px;}
+.cs-name{font-family:'Cormorant Garamond',serif;font-size:1.55rem;line-height:1.15;}
+.cs-contact{font-size:.82rem;color:var(--taupe-dark);line-height:1.7;margin-bottom:18px;}
+.cs-contact a{color:var(--dark);text-decoration:none;}
+.cs-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:22px;}
+.cs-stat{background:var(--beige);border-radius:10px;padding:12px 14px;}
+.cs-stat-n{font-size:1.15rem;font-weight:600;color:var(--dark);}
+.cs-stat-l{font-size:.66rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-top:2px;}
+.cs-sec{font-size:.7rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--taupe-dark);margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--beige-mid);}
+.cs-visit{padding:11px 0;border-bottom:1px solid var(--beige);}
+.cs-visit:last-child{border-bottom:none;}
+.cs-visit-top{display:flex;justify-content:space-between;gap:10px;font-size:.84rem;font-weight:600;}
+.cs-visit-p{font-size:.8rem;color:var(--taupe-dark);margin-top:3px;line-height:1.45;}
+.cs-futur{display:inline-block;font-size:.62rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;background:var(--dark);color:var(--white);border-radius:4px;padding:2px 6px;margin-left:6px;vertical-align:middle;}
+.cs-annule{opacity:.5;text-decoration:line-through;}
+.cs-note-form{background:var(--beige);border-radius:10px;padding:12px;margin-bottom:12px;}
+.cs-note-types{display:flex;gap:6px;margin-bottom:8px;}
+.cs-type{flex:1;padding:8px;border:1.5px solid var(--beige-mid);background:var(--white);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.76rem;cursor:pointer;}
+.cs-type.active{border-color:var(--dark);font-weight:600;}
+.cs-note-form textarea{width:100%;min-height:70px;padding:10px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.85rem;box-sizing:border-box;resize:vertical;}
+.cs-note{position:relative;background:var(--white);border:1px solid var(--beige-mid);border-left:3px solid var(--taupe);border-radius:8px;padding:10px 34px 10px 12px;margin-bottom:8px;}
+.cs-note.perso{border-left-color:#C9A0A0;}
+.cs-note-meta{font-size:.66rem;letter-spacing:.06em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:4px;}
+.cs-note-txt{font-size:.85rem;line-height:1.5;white-space:pre-wrap;word-break:break-word;}
+.cs-note-del{position:absolute;top:6px;right:6px;border:none;background:none;font-size:1rem;color:var(--taupe);cursor:pointer;padding:4px 6px;}
+.cs-empty{font-size:.8rem;color:var(--taupe);font-style:italic;padding:6px 0;}
 </style>
 </head>
 <body>
@@ -372,7 +401,6 @@ tr:hover td{background:var(--cream);}
           <div class="field"><label>Téléphone</label><input type="tel" id="cf-telephone"></div>
           <div class="field"><label>Email</label><input type="email" id="cf-email"></div>
         </div>
-        <div class="field" style="margin-bottom:12px;"><label>Notes (optionnel)</label><input type="text" id="cf-notes" placeholder="Ex : allergies, préférences..."></div>
         <div style="display:flex;gap:10px;margin-top:4px;">
           <button class="btn" onclick="saveClient()">Enregistrer</button>
           <button class="btn btn-outline" onclick="resetClientForm()">Annuler</button>
@@ -503,6 +531,41 @@ tr:hover td{background:var(--cream);}
 </div>
 
 <!-- MODAL RDV -->
+<div class="modal-bg" id="modal-client" onclick="if(event.target===this)closeClientSheet()">
+  <div class="modal">
+    <div class="cs-head">
+      <div class="cs-name" id="cs-name">—</div>
+      <button class="action-btn" onclick="closeClientSheet()">✕</button>
+    </div>
+    <div class="cs-contact" id="cs-contact"></div>
+
+    <div class="cs-stats">
+      <div class="cs-stat"><div class="cs-stat-n" id="cs-nb">—</div><div class="cs-stat-l">Visites</div></div>
+      <div class="cs-stat"><div class="cs-stat-n" id="cs-total">—</div><div class="cs-stat-l">Total dépensé</div></div>
+      <div class="cs-stat"><div class="cs-stat-n" id="cs-last">—</div><div class="cs-stat-l">Dernière visite</div></div>
+      <div class="cs-stat"><div class="cs-stat-n" id="cs-next">—</div><div class="cs-stat-l">Prochain RDV</div></div>
+    </div>
+
+    <div class="cs-sec">Notes</div>
+    <div class="cs-note-form">
+      <div class="cs-note-types">
+        <button type="button" class="cs-type active" id="cs-type-tech" onclick="setNoteType('technique')">✂️ Technique</button>
+        <button type="button" class="cs-type" id="cs-type-perso" onclick="setNoteType('perso')">💬 Personnel</button>
+      </div>
+      <textarea id="cs-note-input" placeholder="Ex : couleur 7.1 + oxydant 20 vol, 35 min de pose…"></textarea>
+      <button class="btn" style="margin-top:8px;padding:10px;" onclick="addClientNote()">Ajouter la note</button>
+    </div>
+    <div id="cs-notes"></div>
+
+    <div class="cs-sec">Historique des visites</div>
+    <div id="cs-visits"><div class="cs-empty">Chargement…</div></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="editClientFromSheet()">✏️ Modifier les coordonnées</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal-rdv">
   <div class="modal">
     <div class="modal-title" id="modal-title">Détails du rendez-vous</div>
@@ -539,7 +602,7 @@ tr:hover td{background:var(--cream);}
   </div>
 </div>
 
-<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v3-rowAt</div>
+<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v4-fiche</div>
 <script>
 const DEFAULT_ADMIN_PWD = 'Miamore10253!';
 
@@ -2097,11 +2160,11 @@ function renderClientsList() {
       <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Email</th>
       <th style="padding:10px 14px;"></th>
     </tr></thead>
-    <tbody>${filtered.map(c => `<tr style="border-top:1px solid var(--beige-mid);">
-      <td style="padding:10px 14px;">${c.prenom} ${c.nom}</td>
+    <tbody>${filtered.map(c => `<tr style="border-top:1px solid var(--beige-mid);cursor:pointer;" onclick="openClientSheet(rowAt(${regRow(c)}))">
+      <td style="padding:10px 14px;font-weight:600;">${c.prenom} ${c.nom}</td>
       <td style="padding:10px 14px;">${c.telephone || '—'}</td>
       <td style="padding:10px 14px;">${c.email || '—'}</td>
-      <td style="padding:10px 14px;"><button class="action-btn" onclick="editClient(rowAt(${regRow(c)}))">Modifier</button></td>
+      <td style="padding:10px 14px;"><button class="action-btn">Fiche →</button></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
 }
@@ -2112,7 +2175,6 @@ function editClient(c) {
   document.getElementById('cf-nom').value = c.nom || '';
   document.getElementById('cf-telephone').value = c.telephone || '';
   document.getElementById('cf-email').value = c.email || '';
-  document.getElementById('cf-notes').value = c.notes || '';
   document.getElementById('client-form-title').textContent = 'Modifier la fiche cliente';
   document.getElementById('client-form-card').scrollIntoView({ behavior: 'smooth' });
 }
@@ -2123,7 +2185,6 @@ function resetClientForm() {
   document.getElementById('cf-nom').value = '';
   document.getElementById('cf-telephone').value = '';
   document.getElementById('cf-email').value = '';
-  document.getElementById('cf-notes').value = '';
   document.getElementById('client-form-title').textContent = 'Ajouter une cliente';
   document.getElementById('client-msg').textContent = '';
 }
@@ -2133,23 +2194,196 @@ async function saveClient() {
   const nom = document.getElementById('cf-nom').value.trim();
   const telephone = document.getElementById('cf-telephone').value.trim();
   const email = document.getElementById('cf-email').value.trim();
-  const notes = document.getElementById('cf-notes').value.trim();
   if (!prenom || !nom) { showMsg('client-msg', 'Le prénom et le nom sont requis.', false); return; }
 
   if (editClientId) {
     await dbCall('clients', 'update', {
-      payload: { prenom, nom, telephone, email, notes },
+      payload: { prenom, nom, telephone, email },
       filters: [{ col: 'id', op: 'eq', value: editClientId }]
     });
   } else {
     await dbCall('clients', 'insert', {
-      payload: { prenom, nom, telephone, email, notes }
+      payload: { prenom, nom, telephone, email, notes: '[]' }
     });
   }
   showMsg('client-msg', 'Fiche cliente enregistrée !', true);
   resetClientForm();
   nrClients = []; // force le rechargement pour le sélecteur du modal RDV
   loadClients();
+}
+
+// ── FICHE CLIENTE ──
+let csClient = null;
+let csNoteType = 'technique';
+
+function escHtml(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function normTel(t) { return String(t || '').replace(/\D/g, '').replace(/^33/, '0'); }
+
+// Les notes sont stockées en JSON dans la colonne "notes" existante : pas de nouvelle
+// table ni de migration. Une ancienne note en texte simple est reprise telle quelle.
+function parseNotes(raw) {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    if (Array.isArray(v)) return v;
+  } catch (e) { /* ancienne note texte */ }
+  return [{ id: 'ancienne', type: 'technique', date: '', texte: String(raw) }];
+}
+
+function setNoteType(t) {
+  csNoteType = t;
+  document.getElementById('cs-type-tech').classList.toggle('active', t === 'technique');
+  document.getElementById('cs-type-perso').classList.toggle('active', t === 'perso');
+  document.getElementById('cs-note-input').placeholder = t === 'technique'
+    ? 'Ex : couleur 7.1 + oxydant 20 vol, 35 min de pose…'
+    : 'Ex : prépare son mariage en juin, aime les RDV du samedi…';
+}
+
+async function openClientSheet(c) {
+  csClient = { ...c };
+  document.getElementById('cs-name').textContent = `${c.prenom || ''} ${c.nom || ''}`.trim() || '—';
+  const tel = c.telephone ? `📞 <a href="tel:${escHtml(c.telephone)}">${escHtml(c.telephone)}</a>` : '';
+  const mail = c.email ? `✉️ <a href="mailto:${escHtml(c.email)}">${escHtml(c.email)}</a>` : '';
+  document.getElementById('cs-contact').innerHTML = [tel, mail].filter(Boolean).join('<br>') || 'Aucune coordonnée';
+  document.getElementById('cs-note-input').value = '';
+  setNoteType('technique');
+  renderClientNotes();
+  ['cs-nb','cs-total','cs-last','cs-next'].forEach(id => document.getElementById(id).textContent = '…');
+  document.getElementById('cs-visits').innerHTML = '<div class="cs-empty">Chargement…</div>';
+  document.getElementById('modal-client').classList.add('open');
+  await loadClientVisits();
+}
+
+function closeClientSheet() {
+  document.getElementById('modal-client').classList.remove('open');
+  csClient = null;
+}
+
+function editClientFromSheet() {
+  if (!csClient) return;
+  const c = csClient;
+  closeClientSheet();
+  editClient(c);
+}
+
+async function loadClientVisits() {
+  const c = csClient;
+  const email = (c.email || '').trim().toLowerCase();
+  const tel = normTel(c.telephone);
+  const { data } = await dbCall('reservations', 'select', {
+    order: [{ col: 'date', ascending: false }, { col: 'heure' }]
+  });
+  if (!csClient || csClient.id !== c.id) return; // fiche fermée entre-temps
+
+  const mine = (data || []).filter(r => {
+    if (reservationAbandonnee(r)) return false;
+    const re = (r.email || '').trim().toLowerCase();
+    const rt = normTel(r.telephone);
+    return (email && re === email) || (tel && tel.length >= 9 && rt === tel);
+  });
+
+  // Une visite = même jour (plusieurs prestations enchaînées = une seule visite)
+  const byDay = {};
+  for (const r of mine) {
+    (byDay[r.date] = byDay[r.date] || []).push(r);
+  }
+  const visits = Object.keys(byDay).sort().reverse().map(date => {
+    const rows = byDay[date].sort((a, b) => a.heure.localeCompare(b.heure));
+    const actifs = rows.filter(r => r.statut !== 'annule');
+    return {
+      date,
+      heure: rows[0].heure,
+      annule: actifs.length === 0,
+      prestations: rows.map(r => r.prestation_nom).join(' + '),
+      prix: actifs.reduce((sum, r) => sum + (Number(r.prix) || 0), 0),
+      reste: actifs.reduce((sum, r) => sum + resteDu(r), 0)
+    };
+  });
+
+  const today = fmtDate(new Date());
+  const passees = visits.filter(v => !v.annule && v.date < today);
+  const futures = visits.filter(v => !v.annule && v.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+
+  document.getElementById('cs-nb').textContent = passees.length;
+  document.getElementById('cs-total').textContent = `${passees.reduce((s2, v) => s2 + v.prix, 0)} €`;
+  document.getElementById('cs-last').textContent = passees.length ? fmtDateFR(passees[0].date) : '—';
+  document.getElementById('cs-next').textContent = futures.length ? fmtDateFR(futures[0].date) : '—';
+
+  const box = document.getElementById('cs-visits');
+  if (!visits.length) {
+    box.innerHTML = '<div class="cs-empty">Aucune visite enregistrée pour le moment.</div>';
+    return;
+  }
+  box.innerHTML = visits.map(v => {
+    const futur = !v.annule && v.date >= today;
+    const detail = v.annule ? 'Annulé'
+      : `${v.prix} €${v.reste > 0 ? ` · reste ${v.reste} €` : ''}`;
+    return `<div class="cs-visit${v.annule ? ' cs-annule' : ''}">
+      <div class="cs-visit-top">
+        <span>${fmtDateFR(v.date)} · ${escHtml(v.heure)}${futur ? '<span class="cs-futur">À venir</span>' : ''}</span>
+        <span>${detail}</span>
+      </div>
+      <div class="cs-visit-p">${escHtml(v.prestations)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderClientNotes() {
+  const notes = parseNotes(csClient && csClient.notes);
+  const box = document.getElementById('cs-notes');
+  if (!notes.length) {
+    box.innerHTML = '<div class="cs-empty">Aucune note pour le moment.</div>';
+    return;
+  }
+  const sorted = [...notes].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  box.innerHTML = sorted.map(n => {
+    const perso = n.type === 'perso';
+    const label = perso ? '💬 Personnel' : '✂️ Technique';
+    const date = n.date ? ` · ${fmtDateFR(n.date)}` : '';
+    return `<div class="cs-note${perso ? ' perso' : ''}">
+      <div class="cs-note-meta">${label}${date}</div>
+      <div class="cs-note-txt">${escHtml(n.texte)}</div>
+      <button class="cs-note-del" title="Supprimer" onclick="deleteClientNote('${escHtml(n.id)}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function saveClientNotes(notes) {
+  const json = JSON.stringify(notes);
+  await dbCall('clients', 'update', {
+    payload: { notes: json },
+    filters: [{ col: 'id', op: 'eq', value: csClient.id }]
+  });
+  csClient.notes = json;
+  const inList = allClients.find(x => x.id === csClient.id);
+  if (inList) inList.notes = json;
+  renderClientNotes();
+}
+
+async function addClientNote() {
+  if (!csClient) return;
+  const input = document.getElementById('cs-note-input');
+  const texte = input.value.trim();
+  if (!texte) { input.focus(); return; }
+  const notes = parseNotes(csClient.notes);
+  notes.push({
+    id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    type: csNoteType,
+    date: fmtDate(new Date()),
+    texte
+  });
+  input.value = '';
+  await saveClientNotes(notes);
+}
+
+async function deleteClientNote(id) {
+  if (!csClient) return;
+  if (!confirm('Supprimer cette note ?')) return;
+  const notes = parseNotes(csClient.notes).filter(n => String(n.id) !== String(id));
+  await saveClientNotes(notes);
 }
 
 // ── UTILS ──
