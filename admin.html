@@ -600,8 +600,12 @@ tr:hover td{background:var(--cream);}
     <div class="cs-sec">Historique des visites</div>
     <div id="cs-visits"><div class="cs-empty">Chargement…</div></div>
 
-    <div class="modal-actions">
+    <div class="modal-actions" style="flex-wrap:wrap;">
       <button class="btn btn-outline" onclick="editClientFromSheet()">✏️ Modifier les coordonnées</button>
+    </div>
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      <button class="btn btn-outline" onclick="bloquerCliente()">🚫 Bloquer</button>
+      <button class="btn btn-outline" style="color:var(--error);border-color:var(--error);" onclick="supprimerCliente()">🗑️ Supprimer la fiche</button>
     </div>
   </div>
 </div>
@@ -642,7 +646,7 @@ tr:hover td{background:var(--cream);}
   </div>
 </div>
 
-<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v8-simple</div>
+<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v9-fiches</div>
 <script>
 // ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify) ──
 async function dbCall(table, action, opts) {
@@ -2541,6 +2545,40 @@ function editClientFromSheet() {
   const c = csClient;
   closeClientSheet();
   editClient(c);
+}
+
+async function bloquerCliente() {
+  if (!csClient) return;
+  const nom = `${csClient.prenom || ''} ${csClient.nom || ''}`.trim();
+  const email = (csClient.email || '').trim().toLowerCase();
+  const tel = (csClient.telephone || '').trim();
+  if (!email && !tel) {
+    alert('Cette fiche n’a ni email ni téléphone : impossible de la bloquer.');
+    return;
+  }
+  if (!confirm(`Bloquer ${nom} pour toute nouvelle réservation en ligne ?`)) return;
+  try {
+    await dbCall('clients_bloques', 'insert', {
+      payload: { email: email || null, telephone: tel || null, raison: 'Bloquée depuis la fiche cliente' }
+    });
+    alert('Cliente bloquée. Elle ne pourra plus réserver en ligne.');
+  } catch (err) {
+    alert('Erreur lors du blocage : ' + err.message);
+  }
+}
+
+async function supprimerCliente() {
+  if (!csClient) return;
+  const nom = `${csClient.prenom || ''} ${csClient.nom || ''}`.trim();
+  if (!confirm(`Supprimer définitivement la fiche de ${nom} ?\n\nSes rendez-vous passés sont conservés dans l’agenda, mais ses notes seront perdues.`)) return;
+  try {
+    await dbCall('clients', 'delete', { filters: [{ col: 'id', op: 'eq', value: csClient.id }] });
+    allClients = allClients.filter(c => c.id !== csClient.id);
+    closeClientSheet();
+    renderClientsList();
+  } catch (err) {
+    alert('Erreur lors de la suppression : ' + err.message);
+  }
 }
 
 async function loadClientVisits() {
