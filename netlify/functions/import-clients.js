@@ -5,7 +5,7 @@
 const { getDb } = require('./lib/turso');
 const CLIENTS = require('./clients-data');
 
-const PAQUET = 100;
+const PAQUET = 60;
 
 function normTel(v) {
   const d = String(v || '').replace(/\D/g, '').replace(/^33/, '0');
@@ -77,13 +77,17 @@ exports.handler = async function (event) {
     const lot = CLIENTS.slice(debut, debut + PAQUET);
     let ajoutees = 0, completees = 0, ignorees = 0;
 
+    // Toutes les écritures du paquet partent en UN SEUL aller-retour : une par une,
+    // la fonction dépassait les 10 secondes autorisées par Netlify et s'arrêtait
+    // au milieu du paquet.
+    const ecritures = [];
+
     for (const c of lot) {
       const mail = normMail(c.email), tel = normTel(c.telephone);
       const dejaLa = (mail && parMail.get(mail)) || (tel && parTel.get(tel))
         || (!mail && !tel && parNom.get(cleNom(c)));
 
       if (dejaLa) {
-        // On complète seulement ce qui manque, on n'écrase jamais.
         const maj = {};
         if (!dejaLa.telephone && c.telephone) maj.telephone = c.telephone;
         if (!dejaLa.email && c.email) maj.email = c.email;
@@ -95,24 +99,34 @@ exports.handler = async function (event) {
         }
         const cles = Object.keys(maj);
         if (cles.length) {
-          await db.execute({
+          ecritures.push({
             sql: `UPDATE clients SET ${cles.map(k => `${k} = ?`).join(',')} WHERE id = ?`,
             args: [...cles.map(k => maj[k]), dejaLa.id]
           });
+          Object.assign(dejaLa, maj);
           completees++;
         } else {
           ignorees++;
         }
       } else {
-        const res = await db.execute({
-          sql: 'INSERT INTO clients (prenom, nom, telephone, email, notes) VALUES (?,?,?,?,?) RETURNING id',
+        ecritures.push({
+          sql: 'INSERT INTO clients (prenom, nom, telephone, email, notes) VALUES (?,?,?,?,?)',
           args: [c.prenom, c.nom, c.telephone, c.email, c.notes]
         });
-        const nouveau = { id: res.rows[0] && res.rows[0].id, ...c };
-        if (mail) parMail.set(mail, nouveau);
-        if (tel) parTel.set(tel, nouveau);
-        parNom.set(cleNom(c), nouveau);
+        // On garde la trace tout de suite : deux fiches identiques dans le même
+        // paquet ne doivent pas être insérées deux fois.
+        if (mail) parMail.set(mail, { ...c });
+        if (tel) parTel.set(tel, { ...c });
+        parNom.set(cleNom(c), { ...c });
         ajoutees++;
+      }
+    }
+
+    if (ecritures.length) {
+      if (typeof db.batch === 'function') {
+        await db.batch(ecritures, 'write');
+      } else {
+        for (const e of ecritures) await db.execute(e);
       }
     }
 
