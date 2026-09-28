@@ -241,6 +241,7 @@ tr:hover td{background:var(--cream);}
     <div class="nav-section">Gestion</div>
     <div class="nav-item" onclick="showSection('disponibilites')">🗓 Disponibilités</div>
     <div class="nav-item" onclick="showSection('prestations')">✂️ Prestations</div>
+    <div class="nav-item" onclick="showSection('produits')">🧴 Produits</div>
     <div class="nav-item" onclick="showSection('clients')">👤 Clients</div>
     <div class="nav-item" onclick="showSection('bloques')">🚫 Clients bloqués</div>
     <div class="nav-item" onclick="showSection('parametres')">⚙️ Paramètres</div>
@@ -423,6 +424,56 @@ tr:hover td{background:var(--cream);}
       </div>
     </div>
 
+    <!-- PRODUITS -->
+    <div class="section" id="sec-produits">
+      <div class="content-title">Produits</div>
+      <div class="content-sub">Vente de produits (shampoing, soins…) — jamais visible sur le site, usage interne uniquement</div>
+
+      <div id="produits-groups" style="margin-bottom:20px;"></div>
+      <div class="form-card" id="produit-form-card">
+        <div class="form-card-title" id="produit-form-title">Ajouter un produit</div>
+        <div class="field-row">
+          <div class="field"><label>Nom</label><input type="text" id="pdf-nom" placeholder="Ex: Shampoing 1L"></div>
+          <div class="field"><label>Prix (€)</label><input type="number" id="pdf-prix" placeholder="36"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button class="btn" onclick="saveProduit()">Enregistrer</button>
+          <button class="btn btn-outline" onclick="resetProduitForm()">Annuler</button>
+        </div>
+        <div id="produit-msg"></div>
+      </div>
+
+      <div class="form-card" style="margin-top:24px;">
+        <div class="form-card-title">Vente rapide (sans rendez-vous)</div>
+        <div class="content-sub" style="margin-bottom:14px;">Pour une cliente de passage, ou un produit vendu en dehors d'un rdv.</div>
+        <div class="field" style="margin-bottom:14px;">
+          <label>Produit</label>
+          <select id="vr-produit" onchange="onVenteRapideProduitChange()" style="width:100%;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;background:var(--white);">
+            <option value="">— Choisir un produit —</option>
+            <option value="autre">Autre (saisie libre)</option>
+          </select>
+        </div>
+        <div class="field-row" id="vr-custom-row" style="display:none;">
+          <div class="field"><label>Nom du produit</label><input type="text" id="vr-nom-libre" placeholder="Ex: Pompe"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Prix unitaire (€)</label><input type="number" id="vr-prix"></div>
+          <div class="field"><label>Quantité</label><input type="number" id="vr-quantite" value="1" min="1"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Date</label><input type="date" id="vr-date"></div>
+          <div class="field"><label>Cliente (optionnel)</label><input type="text" id="vr-client" placeholder="Prénom Nom"></div>
+        </div>
+        <button class="btn" onclick="saveVenteRapide()">Enregistrer la vente</button>
+        <div id="vr-msg"></div>
+      </div>
+
+      <div class="form-card" style="margin-top:24px;">
+        <div class="form-card-title">Ventes récentes (hors rdv)</div>
+        <div id="ventes-recentes-list" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
     <!-- CLIENTS -->
     <div class="section" id="sec-clients">
       <div class="content-title">Clients</div>
@@ -530,6 +581,7 @@ tr:hover td{background:var(--cream);}
           <button type="button" id="nr-remise-type-eur" onclick="setRemiseType('eur')" style="padding:7px 12px;border:1px solid var(--beige-mid);background:var(--white);color:var(--dark);border-radius:6px;font-family:'Poppins',sans-serif;font-size:.8rem;cursor:pointer;">€</button>
           <input type="number" id="nr-remise-val" min="0" placeholder="0" oninput="updateRemise()" style="flex:1;padding:8px 12px;border:1px solid var(--beige-mid);border-radius:6px;font-family:'Poppins',sans-serif;font-size:.88rem;">
         </div>
+        <div style="font-size:.72rem;color:var(--taupe-dark);margin-top:5px;">S'applique uniquement à la prestation ci-dessus. Les autres prestations ajoutées à ce rdv pourront être réduites individuellement en cliquant sur leur bloc dans le planning une fois enregistrées.</div>
       </div>
       <div id="nr-prix-final-box" style="text-align:right;font-size:.85rem;line-height:1.5;color:var(--taupe-dark);min-width:90px;padding-bottom:2px;"></div>
     </div>
@@ -555,6 +607,19 @@ tr:hover td{background:var(--cream);}
       </div>
       <div id="nr-total-summary" style="font-size:.8rem;color:var(--taupe-dark);margin-bottom:14px;"></div>
     </div>
+    <div id="nr-produits-section" style="border-top:1px dashed var(--beige-mid);padding-top:14px;margin-bottom:14px;">
+      <div id="nr-produits-list"></div>
+      <label style="display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:6px;">+ Ajouter un produit vendu à ce rdv</label>
+      <div style="display:flex;align-items:flex-end;gap:8px;">
+        <div class="field" style="flex:1;margin:0;">
+          <select id="nr-add-produit" style="width:100%;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;background:var(--white);">
+            <option value="">— Choisir un produit —</option>
+          </select>
+        </div>
+        <div class="field" style="flex:0 0 64px;margin:0;"><label>Qté</label><input type="number" id="nr-produit-qte" value="1" min="1"></div>
+        <button type="button" class="btn btn-outline" style="width:auto;padding:11px 16px;" onclick="addProduitToRdv()">Ajouter</button>
+      </div>
+    </div>
     <div class="field" style="margin-bottom:14px;position:relative;">
       <label>Rechercher une cliente existante (optionnel)</label>
       <input type="text" id="nr-client-search" placeholder="Tape un nom, téléphone ou email..." oninput="onNrClientSearch()" autocomplete="off" style="width:100%;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;box-sizing:border-box;">
@@ -571,7 +636,7 @@ tr:hover td{background:var(--cream);}
     <div class="field" style="margin-bottom:14px;"><label>Email (optionnel, pour envoyer la confirmation)</label><input type="email" id="nr-email" placeholder="cliente@email.com"></div>
     <label style="display:flex;align-items:center;gap:10px;font-size:.85rem;margin-bottom:14px;cursor:pointer;">
       <input type="checkbox" id="nr-acompte-paye" style="width:18px;height:18px;flex:0 0 auto;">
-      <span>Acompte déjà encaissé (espèces, virement, PayPal…)</span>
+      <span>Acompte déjà encaissé (espèces, virement…)</span>
     </label>
     <div id="nr-msg" style="font-size:.78rem;margin-top:8px;"></div>
     <div class="modal-actions">
@@ -657,7 +722,7 @@ tr:hover td{background:var(--cream);}
   </div>
 </div>
 
-<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v11-remise</div>
+<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v15-produits</div>
 <script>
 // ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify) ──
 async function dbCall(table, action, opts) {
@@ -781,6 +846,7 @@ function showSection(id) {
   if (id === 'agenda') loadAgenda();
   if (id === 'reservations') loadReservations();
   if (id === 'prestations') loadPrestations();
+  if (id === 'produits') { loadProduits(); loadVentesRecentes(); }
   if (id === 'clients') loadClients();
   if (id === 'bloques') loadBloques();
   if (id === 'disponibilites') { renderAdminCal(); loadWeeklyHours(); loadBlocages(); }
@@ -808,7 +874,7 @@ function dateCreation(r) {
 }
 
 function estPayeeEnLigne(r) {
-  return r.payment_method === 'stripe' || r.payment_method === 'paypal';
+  return r.payment_method === 'stripe';
 }
 
 function etatCloche() {
@@ -1218,6 +1284,67 @@ async function ensureNrPrestationsLoaded() {
     buildGroupedOptions(nrPrestations);
 }
 
+// ── Produits vendus liés à un rdv ──
+let nrProduits = [];
+let nrExtraProduits = [];        // produits ajoutés dans ce formulaire, pas encore enregistrés
+let nrExistingProduitVentes = []; // produits déjà enregistrés en base pour ce rdv (mode édition)
+
+async function ensureNrProduitsLoaded() {
+  if (nrProduits.length > 0) return;
+  const { data } = await dbCall('produits', 'select', {
+    filters: [{ col: 'actif', op: 'eq', value: true }],
+    order: [{ col: 'ordre' }]
+  });
+  nrProduits = data || [];
+  document.getElementById('nr-add-produit').innerHTML =
+    '<option value="">— Choisir un produit —</option>' +
+    nrProduits.map((p, i) => `<option value="${i}">${p.nom} — ${p.prix} €</option>`).join('');
+}
+
+function addProduitToRdv() {
+  const sel = document.getElementById('nr-add-produit');
+  const i = sel.value;
+  if (i === '') return;
+  const p = nrProduits[Number(i)];
+  if (!p) return;
+  const qte = Number(document.getElementById('nr-produit-qte').value) || 1;
+  nrExtraProduits.push({ nom: p.nom, prix: p.prix, quantite: qte });
+  sel.value = '';
+  document.getElementById('nr-produit-qte').value = '1';
+  renderNrProduitsList();
+}
+
+function removeExtraProduit(i) {
+  nrExtraProduits.splice(i, 1);
+  renderNrProduitsList();
+}
+
+async function removeExistingProduitVente(id) {
+  if (!confirm('Retirer ce produit de ce rdv ?')) return;
+  await dbCall('ventes_produits', 'delete', { filters: [{ col: 'id', op: 'eq', value: id }] });
+  nrExistingProduitVentes = nrExistingProduitVentes.filter(v => v.id !== id);
+  renderNrProduitsList();
+}
+
+function renderNrProduitsList() {
+  const container = document.getElementById('nr-produits-list');
+  if (!container) return;
+  const existingHtml = nrExistingProduitVentes.map(v => `
+    <div style="display:flex;align-items:center;gap:10px;background:var(--cream);border:1px solid var(--beige-mid);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
+      <div style="flex:1;font-size:.85rem;">${v.produit_nom}${v.quantite > 1 ? ` ×${v.quantite}` : ''} — ${(v.prix * v.quantite).toFixed(2)} € <span style="color:var(--taupe-dark);font-size:.72rem;">(déjà enregistré)</span></div>
+      <button type="button" onclick="removeExistingProduitVente(${v.id})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:.9rem;">✕</button>
+    </div>`).join('');
+  const pendingHtml = nrExtraProduits.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:10px;background:var(--cream);border:1px solid var(--beige-mid);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
+      <div style="flex:1;font-size:.85rem;">${p.nom}${p.quantite > 1 ? ` ×${p.quantite}` : ''} — ${(p.prix * p.quantite).toFixed(2)} €</div>
+      <button type="button" onclick="removeExtraProduit(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:.9rem;">✕</button>
+    </div>`).join('');
+  const label = (nrExistingProduitVentes.length || nrExtraProduits.length)
+    ? '<label style="display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:6px;">Produits vendus sur ce rdv</label>'
+    : '';
+  container.innerHTML = label + existingHtml + pendingHtml;
+}
+
 function buildGroupedOptions(list) {
   const groups = [];
   const idx = {};
@@ -1264,6 +1391,13 @@ async function openNewRdvModal() {
   nrExtraServices = [];
   document.getElementById('nr-multi-section').style.display = '';
   renderExtraServicesList();
+
+  await ensureNrProduitsLoaded();
+  nrExtraProduits = [];
+  nrExistingProduitVentes = [];
+  document.getElementById('nr-produit-qte').value = '1';
+  renderNrProduitsList();
+
   document.getElementById('modal-new-rdv').classList.add('open');
 }
 
@@ -1285,6 +1419,8 @@ async function openEditRdvModal() {
   document.getElementById('nr-nom-libre').value = currentRdv.prestation_nom || '';
   document.getElementById('nr-prix').value = currentRdv.prix || '';
   document.getElementById('nr-duree').value = currentRdv.duree_min || '';
+  document.getElementById('nr-remise-val').value = '';
+  setRemiseType('pct');
   document.getElementById('nr-prenom').value = currentRdv.prenom || '';
   document.getElementById('nr-nom').value = currentRdv.nom || '';
   document.getElementById('nr-tel').value = currentRdv.telephone || '';
@@ -1298,6 +1434,15 @@ async function openEditRdvModal() {
   nrExtraServices = [];
   document.getElementById('nr-multi-section').style.display = '';
   document.getElementById('nr-msg').textContent = '';
+
+  await ensureNrProduitsLoaded();
+  nrExtraProduits = [];
+  document.getElementById('nr-produit-qte').value = '1';
+  const { data: ventesExistantes } = await dbCall('ventes_produits', 'select', {
+    filters: [{ col: 'reservation_id', op: 'eq', value: currentRdv.id }]
+  }).catch(() => ({ data: [] }));
+  nrExistingProduitVentes = ventesExistantes || [];
+  renderNrProduitsList();
 
   document.getElementById('modal-new-rdv').classList.add('open');
 }
@@ -1340,7 +1485,7 @@ function primaryServiceFromForm() {
   }
   return {
     nom,
-    prix: prixNet || Number(document.getElementById('nr-prix').value) || 0,
+    prix: Number(document.getElementById('nr-prix').value) || 0,
     duree_min: Number(document.getElementById('nr-duree').value) || 0
   };
 }
@@ -1460,6 +1605,15 @@ function renderExtraServicesList() {
 
 function updateNrTotalSummary() {
   const primary = primaryServiceFromForm();
+  const remiseValEl = document.getElementById('nr-remise-val');
+  if (remiseValEl) {
+    const remiseVal = Number(remiseValEl.value) || 0;
+    if (remiseVal > 0) {
+      const isEur = document.getElementById('nr-remise-type-eur').style.background === 'var(--dark)';
+      const remiseMontant = isEur ? Math.min(remiseVal, primary.prix) : Math.round(primary.prix * remiseVal / 100);
+      primary.prix = Math.max(primary.prix - remiseMontant, 0);
+    }
+  }
   const all = [primary, ...nrExtraServices].filter(s => s.nom);
   const summary = document.getElementById('nr-total-summary');
   if (all.length <= 1) { summary.textContent = ''; return; }
@@ -1499,7 +1653,7 @@ async function saveNewRdv() {
       const payload = {
         prenom, nom, telephone: tel, email,
         prestation_nom: primary.nom,
-        date, heure, duree_min: primary.duree_min, prix: primary.prix, acompte: acompteTotal,
+        date, heure, duree_min: primary.duree_min, prix: prixNet, acompte: acompteTotal,
         acompte_paye: acomptePaye, montant_paye: acomptePaye ? acompteTotal : 0
       };
       await dbCall('reservations', 'update', {
@@ -1542,7 +1696,7 @@ async function saveNewRdv() {
       const payload = {
         prenom, nom, telephone: tel, email,
         prestation_nom: services[0].nom,
-        date, heure, duree_min: services[0].duree_min, prix: services[0].prix, acompte: acompteTotal,
+        date, heure, duree_min: services[0].duree_min, prix: prixNet, acompte: acompteTotal,
         acompte_paye: acomptePaye, montant_paye: acomptePaye ? acompteTotal : 0
       };
       const { data } = await dbCall('reservations', 'insert', {
@@ -1562,7 +1716,7 @@ async function saveNewRdv() {
         const payload = {
           prenom, nom, telephone: tel, email,
           prestation_nom: s.nom,
-          date, heure: `${hh}:${mm}`, duree_min: s.duree_min, prix: s.prix,
+          date, heure: `${hh}:${mm}`, duree_min: s.duree_min, prix: i === 0 ? prixNet : s.prix,
           acompte: i === 0 ? acompteTotal : 0,
           acompte_paye: i === 0 ? acomptePaye : 0,
           montant_paye: (i === 0 && acomptePaye) ? acompteTotal : 0,
@@ -1577,6 +1731,24 @@ async function saveNewRdv() {
     msg.style.color = 'var(--error)';
     msg.textContent = 'Erreur : ' + err.message;
     return;
+  }
+
+  // Produits vendus ajoutés à ce rdv (jamais visibles sur le site public)
+  const rdvIdPourProduits = editingRdvId || newReservationId;
+  if (nrExtraProduits.length && rdvIdPourProduits) {
+    try {
+      for (const p of nrExtraProduits) {
+        await dbCall('ventes_produits', 'insert', {
+          payload: {
+            produit_nom: p.nom, prix: p.prix, quantite: p.quantite,
+            date, reservation_id: rdvIdPourProduits, prenom, nom
+          }
+        });
+      }
+      nrExtraProduits = [];
+    } catch (err) {
+      console.error('Erreur enregistrement produits vendus:', err);
+    }
   }
 
   // Crée ou met à jour la fiche client (best-effort, sans bloquer le RDV en cas d'échec)
@@ -1644,7 +1816,7 @@ async function loadAgenda() {
   const date = input.value;
   const dow = new Date(date).getDay();
 
-  const [{ data: rdvs }, { data: blocages }, { data: dispos }] = await Promise.all([
+  const [{ data: rdvs }, { data: blocages }, { data: dispos }, { data: ventesJour }] = await Promise.all([
     dbCall('reservations', 'select', {
       filters: [{ col: 'date', op: 'eq', value: date }, { col: 'statut', op: 'neq', value: 'annule' }],
       order: [{ col: 'heure' }]
@@ -1655,7 +1827,10 @@ async function loadAgenda() {
     }),
     dbCall('disponibilites', 'select', {
       filters: [{ col: 'date', op: 'eq', value: date }]
-    })
+    }),
+    dbCall('ventes_produits', 'select', {
+      filters: [{ col: 'date', op: 'eq', value: date }]
+    }).catch(() => ({ data: [] }))
   ]);
   agendaData = (rdvs || []).filter(r => !reservationAbandonnee(r));
   agendaBlocages = blocages || [];
@@ -1668,6 +1843,7 @@ async function loadAgenda() {
   const summary = document.getElementById('agenda-summary');
   const totalPrix = agendaData.reduce((s, r) => s + (r.prix || 0), 0);
   const totalAcompte = agendaData.reduce((s, r) => s + encaisseEnLigne(r), 0);
+  const totalProduits = (ventesJour || []).reduce((s, v) => s + (Number(v.prix) || 0) * (Number(v.quantite) || 1), 0);
 
   if (agendaFerme) {
     summary.innerHTML = `<div class="stat-card" style="flex:1;min-width:200px;background:#FFEBEE;border-color:#EF9A9A;"><div class="stat-label" style="color:var(--error);font-size:.8rem;">🚫 Salon fermé ce jour</div></div>`;
@@ -1675,6 +1851,7 @@ async function loadAgenda() {
     summary.innerHTML = `
       <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${agendaData.length}</div><div class="stat-label">Rendez-vous</div></div>
       <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${totalPrix} €</div><div class="stat-label">Total prestations</div></div>
+      <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${totalProduits} €</div><div class="stat-label">Total produits</div></div>
       <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${totalAcompte} €</div><div class="stat-label">Total encaissé</div></div>`;
   }
 
@@ -1891,7 +2068,7 @@ function openModal(r) {
     ? `<br><strong>Acompte remboursé :</strong> ${r.acompte_rembourse === true ? 'Oui' : (r.acompte_rembourse === false ? 'Non' : '—')}`
     : '';
   const paiementLigne = r.acompte_paye
-    ? `<span style="color:var(--success);">✓ Payé (${r.payment_method === 'paypal' ? 'PayPal' : 'carte'})</span>`
+    ? `<span style="color:var(--success);">✓ Payé (${r.payment_method === 'stripe' ? 'carte' : 'manuel'})</span>`
     : `<span style="color:var(--error);">Non payé</span>`;
   document.getElementById('modal-body').innerHTML = `
     <p style="font-size:.82rem;line-height:1.8;color:var(--dark);">
@@ -1968,7 +2145,7 @@ async function finalizeCancel(remboursed) {
   } else if (autoRefundOutcome === 'failed') {
     alert('⚠️ Le remboursement automatique a échoué. Merci de rembourser manuellement sur le dashboard Stripe.');
   } else if (autoRefundOutcome === 'not_applicable') {
-    alert('Aucun paiement Stripe trouvé pour cette réservation (PayPal, espèces, ou non payée) — pensez à rembourser manuellement si besoin.');
+    alert('Aucun paiement Stripe trouvé pour cette réservation (espèces ou non payée) — pensez à rembourser manuellement si besoin.');
   }
 }
 async function deleteRdv() {
@@ -2400,7 +2577,7 @@ async function savePrest() {
   const sous_categorie = document.getElementById('pf-sous-categorie').value.trim() || null;
   const prix = parseFloat(document.getElementById('pf-prix').value);
   const duree_min = parseInt(document.getElementById('pf-dur').value);
-  if (!nom || !prix || !duree_min) { showMsg('prest-msg', 'Tous les champs sont requis.', false); return; }
+  if (!nom || isNaN(prix) || prix < 0 || isNaN(duree_min) || duree_min < 0) { showMsg('prest-msg', 'Tous les champs sont requis (la durée peut être 0).', false); return; }
   if (editPrestId) {
     await dbCall('prestations', 'update', {
       payload: { nom, prix, duree_min, categorie, sous_categorie },
@@ -2427,6 +2604,168 @@ async function togglePrest(id, actif) {
     filters: [{ col: 'id', op: 'eq', value: id }]
   });
   loadPrestations();
+}
+
+// ── PRODUITS (vente en interne, jamais affiché sur le site public) ──
+let editProduitId = null;
+let allProduits = [];
+
+async function loadProduits() {
+  const { data } = await dbCall('produits', 'select', { order: [{ col: 'ordre' }] });
+  allProduits = data || [];
+  const container = document.getElementById('produits-groups');
+  if (allProduits.length === 0) { container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--taupe);">Aucun produit.</div>'; return; }
+  container.innerHTML = `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:.85rem;"><tbody>` +
+    allProduits.map(p => `<tr>
+      <td style="padding:10px 14px;">${p.nom}</td>
+      <td style="padding:10px 14px;">${p.prix} €</td>
+      <td style="padding:10px 14px;">${p.actif ? '✓' : '—'}</td>
+      <td style="padding:10px 14px;text-align:right;white-space:nowrap;">
+        <button class="action-btn" onclick="editProduit(rowAt(${regRow(p)}))">Modifier</button>
+        <button class="action-btn red" onclick="toggleProduit(${p.id}, ${p.actif})">${p.actif ? 'Désactiver' : 'Activer'}</button>
+      </td>
+    </tr>`).join('') + `</tbody></table></div>`;
+
+  // Alimente le sélecteur de la vente rapide avec les produits actifs
+  const actifs = allProduits.filter(p => p.actif);
+  document.getElementById('vr-produit').innerHTML =
+    '<option value="">— Choisir un produit —</option>' +
+    actifs.map((p, i) => `<option value="${allProduits.indexOf(p)}">${p.nom} — ${p.prix} €</option>`).join('') +
+    '<option value="autre">Autre (saisie libre)</option>';
+}
+
+function editProduit(p) {
+  editProduitId = p.id;
+  document.getElementById('pdf-nom').value = p.nom;
+  document.getElementById('pdf-prix').value = p.prix;
+  document.getElementById('produit-form-title').textContent = 'Modifier le produit';
+}
+
+function resetProduitForm() {
+  editProduitId = null;
+  document.getElementById('pdf-nom').value = '';
+  document.getElementById('pdf-prix').value = '';
+  document.getElementById('produit-form-title').textContent = 'Ajouter un produit';
+}
+
+async function saveProduit() {
+  const nom = document.getElementById('pdf-nom').value.trim();
+  const prix = parseFloat(document.getElementById('pdf-prix').value);
+  if (!nom || isNaN(prix) || prix < 0) { showMsg('produit-msg', 'Le nom et le prix sont requis.', false); return; }
+  if (editProduitId) {
+    await dbCall('produits', 'update', {
+      payload: { nom, prix },
+      filters: [{ col: 'id', op: 'eq', value: editProduitId }]
+    });
+  } else {
+    const { data: max } = await dbCall('produits', 'select', {
+      order: [{ col: 'ordre', ascending: false }],
+      limit: 1
+    });
+    const ordre = max?.[0]?.ordre + 1 || 1;
+    await dbCall('produits', 'insert', {
+      payload: { nom, prix, actif: true, ordre }
+    });
+  }
+  showMsg('produit-msg', 'Produit enregistré !', true);
+  resetProduitForm();
+  loadProduits();
+}
+
+async function toggleProduit(id, actif) {
+  await dbCall('produits', 'update', {
+    payload: { actif: !actif },
+    filters: [{ col: 'id', op: 'eq', value: id }]
+  });
+  loadProduits();
+}
+
+// ── Vente rapide (hors rdv) ──
+function onVenteRapideProduitChange() {
+  const val = document.getElementById('vr-produit').value;
+  const customRow = document.getElementById('vr-custom-row');
+  if (val === 'autre') {
+    customRow.style.display = 'grid';
+    document.getElementById('vr-prix').value = '';
+  } else if (val !== '') {
+    customRow.style.display = 'none';
+    const p = allProduits[Number(val)];
+    if (p) document.getElementById('vr-prix').value = p.prix;
+  } else {
+    customRow.style.display = 'none';
+  }
+}
+
+async function saveVenteRapide() {
+  const msg = document.getElementById('vr-msg');
+  const val = document.getElementById('vr-produit').value;
+  let nom = '';
+  if (val === 'autre') {
+    nom = document.getElementById('vr-nom-libre').value.trim();
+  } else if (val !== '') {
+    const p = allProduits[Number(val)];
+    nom = p ? p.nom : '';
+  }
+  const prix = Number(document.getElementById('vr-prix').value) || 0;
+  const quantite = Number(document.getElementById('vr-quantite').value) || 1;
+  const date = document.getElementById('vr-date').value || fmtDate(new Date());
+  const client = document.getElementById('vr-client').value.trim();
+  let prenom = '', clNom = '';
+  if (client) {
+    const parts = client.split(' ');
+    prenom = parts.shift() || '';
+    clNom = parts.join(' ');
+  }
+
+  if (!nom || !prix) {
+    msg.style.color = 'var(--error)';
+    msg.textContent = 'Merci de choisir un produit et d\'indiquer un prix.';
+    return;
+  }
+
+  await dbCall('ventes_produits', 'insert', {
+    payload: { produit_nom: nom, prix, quantite, date, reservation_id: null, prenom, nom: clNom }
+  });
+
+  msg.style.color = 'var(--success)';
+  msg.textContent = 'Vente enregistrée !';
+  document.getElementById('vr-produit').value = '';
+  document.getElementById('vr-nom-libre').value = '';
+  document.getElementById('vr-prix').value = '';
+  document.getElementById('vr-quantite').value = '1';
+  document.getElementById('vr-client').value = '';
+  document.getElementById('vr-custom-row').style.display = 'none';
+  loadVentesRecentes();
+}
+
+async function loadVentesRecentes() {
+  if (!document.getElementById('vr-date').value) document.getElementById('vr-date').value = fmtDate(new Date());
+  // Pas de filtre "reservation_id = null" côté serveur (SQL ne matche pas
+  // NULL avec "= ?") : on récupère les ventes récentes et on filtre ici.
+  const { data } = await dbCall('ventes_produits', 'select', {
+    order: [{ col: 'id', ascending: false }],
+    limit: 50
+  }).catch(() => ({ data: [] }));
+  const list = document.getElementById('ventes-recentes-list');
+  if (!list) return;
+  const rows = (data || []).filter(v => !v.reservation_id).slice(0, 30);
+  if (rows.length === 0) { list.innerHTML = '<div style="padding:14px;color:var(--taupe);font-size:.85rem;">Aucune vente hors rdv pour le moment.</div>'; return; }
+  list.innerHTML = rows.map(v => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--beige-mid);font-size:.85rem;">
+      <div style="flex:1;">
+        <strong>${v.produit_nom}</strong>${v.quantite > 1 ? ` ×${v.quantite}` : ''}
+        ${v.prenom || v.nom ? ` — ${v.prenom || ''} ${v.nom || ''}`.trim() : ''}
+        <div style="color:var(--taupe-dark);font-size:.75rem;">${fmtDateFR(v.date)}</div>
+      </div>
+      <div style="font-weight:600;">${(v.prix * v.quantite).toFixed(2)} €</div>
+      <button class="action-btn red" onclick="deleteVenteRapide(${v.id})">✕</button>
+    </div>`).join('');
+}
+
+async function deleteVenteRapide(id) {
+  if (!confirm('Supprimer cette vente ?')) return;
+  await dbCall('ventes_produits', 'delete', { filters: [{ col: 'id', op: 'eq', value: id }] });
+  loadVentesRecentes();
 }
 
 // ── CLIENTS ──
@@ -2545,6 +2884,7 @@ function updateRemise() {
   const montant = isEur ? Math.min(val, brut) : Math.round(brut * val / 100);
   const net = Math.max(brut - montant, 0);
   box.innerHTML = '<span style="text-decoration:line-through;color:var(--taupe)">' + brut + ' €</span><br><strong style="font-size:1rem;color:var(--dark)">' + net + ' €</strong>';
+  if (typeof updateNrTotalSummary === 'function') updateNrTotalSummary();
 }
 
 // ── FICHE CLIENTE ──
