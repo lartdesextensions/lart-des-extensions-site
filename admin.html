@@ -519,8 +519,19 @@ tr:hover td{background:var(--cream);}
       <div class="field"><label>Nom de la prestation</label><input type="text" id="nr-nom-libre" placeholder="Ex: Retouche"></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Prix (€)</label><input type="number" id="nr-prix"></div>
+      <div class="field"><label>Prix (€)</label><input type="number" id="nr-prix" oninput="updateRemise()"></div>
       <div class="field"><label>Durée (min)</label><input type="number" id="nr-duree"></div>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:10px;margin-bottom:14px;">
+      <div class="field" style="flex:1;margin:0;">
+        <label>Remise</label>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button type="button" id="nr-remise-type-pct" onclick="setRemiseType('pct')" style="padding:7px 12px;border:1px solid var(--dark);background:var(--dark);color:var(--white);border-radius:6px;font-family:'Poppins',sans-serif;font-size:.8rem;cursor:pointer;">%</button>
+          <button type="button" id="nr-remise-type-eur" onclick="setRemiseType('eur')" style="padding:7px 12px;border:1px solid var(--beige-mid);background:var(--white);color:var(--dark);border-radius:6px;font-family:'Poppins',sans-serif;font-size:.8rem;cursor:pointer;">€</button>
+          <input type="number" id="nr-remise-val" min="0" placeholder="0" oninput="updateRemise()" style="flex:1;padding:8px 12px;border:1px solid var(--beige-mid);border-radius:6px;font-family:'Poppins',sans-serif;font-size:.88rem;">
+        </div>
+      </div>
+      <div id="nr-prix-final-box" style="text-align:right;font-size:.85rem;line-height:1.5;color:var(--taupe-dark);min-width:90px;padding-bottom:2px;"></div>
     </div>
     <div id="nr-multi-section">
       <div id="nr-extra-list"></div>
@@ -646,7 +657,7 @@ tr:hover td{background:var(--cream);}
   </div>
 </div>
 
-<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v9-fiches</div>
+<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v11-remise</div>
 <script>
 // ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify) ──
 async function dbCall(table, action, opts) {
@@ -1233,6 +1244,8 @@ async function openNewRdvModal() {
   document.getElementById('nr-tel').value = '';
   document.getElementById('nr-acompte').value = '';
   document.getElementById('nr-acompte-paye').checked = false;
+  document.getElementById('nr-remise-val').value = '';
+  updateRemise();
   document.getElementById('nr-email').value = '';
   document.getElementById('nr-nom-libre').value = '';
   document.getElementById('nr-custom-row').style.display = 'none';
@@ -1305,6 +1318,8 @@ function onNrPrestationChange() {
     customRow.style.display = 'none';
     const p = nrPrestations[Number(val)];
     document.getElementById('nr-prix').value = p.prix;
+    document.getElementById('nr-remise-val').value = '';
+    updateRemise();
     document.getElementById('nr-duree').value = p.duree_min;
     document.getElementById('nr-acompte').value = Math.round(p.prix * 0.35);
   } else {
@@ -1325,7 +1340,7 @@ function primaryServiceFromForm() {
   }
   return {
     nom,
-    prix: Number(document.getElementById('nr-prix').value) || 0,
+    prix: prixNet || Number(document.getElementById('nr-prix').value) || 0,
     duree_min: Number(document.getElementById('nr-duree').value) || 0
   };
 }
@@ -1461,6 +1476,11 @@ async function saveNewRdv() {
   const tel = document.getElementById('nr-tel').value.trim();
   const email = document.getElementById('nr-email').value.trim();
   const acompteTotal = Number(document.getElementById('nr-acompte').value) || 0;
+  const remiseType = document.getElementById('nr-remise-type-eur').style.background === 'var(--dark)' ? 'eur' : 'pct';
+  const remiseVal = Number(document.getElementById('nr-remise-val').value) || 0;
+  const prixBrut = Number(document.getElementById('nr-prix').value) || 0;
+  const remiseMontant = remiseType === 'pct' ? Math.round(prixBrut * remiseVal / 100) : Math.min(remiseVal, prixBrut);
+  const prixNet = Math.max(prixBrut - remiseMontant, 0);
   const acomptePaye = document.getElementById('nr-acompte-paye').checked ? 1 : 0;
   const msg = document.getElementById('nr-msg');
 
@@ -2415,8 +2435,18 @@ let editClientId = null;
 
 async function loadClients() {
   const { data } = await dbCall('clients', 'select', { order: [{ col: 'nom' }] });
-  allClients = data || [];
+  allClients = trierClientes(data || []);
   renderClientsList();
+}
+
+// Tri alphabétique réel : la base classait les noms en majuscules avant les
+// minuscules (SENSAL avant Schneider) et ne gérait pas les accents.
+function trierClientes(liste) {
+  return [...liste].sort((a, b) => {
+    const n = String(a.nom || '').localeCompare(String(b.nom || ''), 'fr', { sensitivity: 'base' });
+    if (n !== 0) return n;
+    return String(a.prenom || '').localeCompare(String(b.prenom || ''), 'fr', { sensitivity: 'base' });
+  });
 }
 
 function renderClientsList() {
@@ -2488,6 +2518,33 @@ async function saveClient() {
   resetClientForm();
   nrClients = []; // force le rechargement pour le sélecteur du modal RDV
   loadClients();
+}
+
+// ── REMISE SUR RENDEZ-VOUS ──
+function setRemiseType(t) {
+  const pct = document.getElementById('nr-remise-type-pct');
+  const eur = document.getElementById('nr-remise-type-eur');
+  if (!pct) return;
+  if (t === 'pct') {
+    pct.style.cssText = 'padding:7px 12px;border:1px solid var(--dark);background:var(--dark);color:var(--white);border-radius:6px;font-family:Poppins,sans-serif;font-size:.8rem;cursor:pointer;';
+    eur.style.cssText = 'padding:7px 12px;border:1px solid var(--beige-mid);background:var(--white);color:var(--dark);border-radius:6px;font-family:Poppins,sans-serif;font-size:.8rem;cursor:pointer;';
+  } else {
+    eur.style.cssText = 'padding:7px 12px;border:1px solid var(--dark);background:var(--dark);color:var(--white);border-radius:6px;font-family:Poppins,sans-serif;font-size:.8rem;cursor:pointer;';
+    pct.style.cssText = 'padding:7px 12px;border:1px solid var(--beige-mid);background:var(--white);color:var(--dark);border-radius:6px;font-family:Poppins,sans-serif;font-size:.8rem;cursor:pointer;';
+  }
+  updateRemise();
+}
+
+function updateRemise() {
+  const box = document.getElementById('nr-prix-final-box');
+  if (!box) return;
+  const brut = Number(document.getElementById('nr-prix').value) || 0;
+  const val  = Number(document.getElementById('nr-remise-val').value) || 0;
+  if (!brut || !val) { box.innerHTML = ''; return; }
+  const isEur = document.getElementById('nr-remise-type-eur').style.background === 'var(--dark)';
+  const montant = isEur ? Math.min(val, brut) : Math.round(brut * val / 100);
+  const net = Math.max(brut - montant, 0);
+  box.innerHTML = '<span style="text-decoration:line-through;color:var(--taupe)">' + brut + ' €</span><br><strong style="font-size:1rem;color:var(--dark)">' + net + ' €</strong>';
 }
 
 // ── FICHE CLIENTE ──
