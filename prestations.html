@@ -520,17 +520,11 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
         <button class="sub-btn" onclick="showSub2('keratine-depose','externe',this)">Posée ailleurs</button>
       </div>
       <div class="sub-panel active" id="sub2-keratine-depose-salon">
-        <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Prix comprenant la pose, la coupe et les extensions (cheveux russes premium 55/70 cm). Extensions 100% naturelles.</p>
         <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Extensions posées au salon. Supplément +15 € si beaucoup de nœuds.</p>
         <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds - Dépose kératine salon',15,10)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément nœuds</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
-        </div>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Dépose kératine salon',35,40)">
-          <input type="checkbox" onclick="event.stopPropagation()">
-          <label>+ Supplément personnalisation de couleur sur extensions</label>
-          <span class="supplement-price">+35 € <span style="font-size:10px;color:var(--taupe);display:block">50 min</span></span>
         </div>
         <table class="price-table">
           <thead><tr><th>Forfait</th><th>Durée</th><th>Tarif</th><th></th></tr></thead>
@@ -543,17 +537,11 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
         </table>
       </div>
       <div class="sub-panel" id="sub2-keratine-depose-externe">
-        <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Prix comprenant la pose, la coupe et les extensions (cheveux russes premium 55/70 cm). Extensions 100% naturelles.</p>
         <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Extensions posées ailleurs. Supplément +15 € si beaucoup de nœuds.</p>
         <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds - Dépose kératine externe',15,10)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément nœuds</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
-        </div>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Dépose kératine externe',35,40)">
-          <input type="checkbox" onclick="event.stopPropagation()">
-          <label>+ Supplément personnalisation de couleur sur extensions</label>
-          <span class="supplement-price">+35 € <span style="font-size:10px;color:var(--taupe);display:block">50 min</span></span>
         </div>
         <table class="price-table">
           <thead><tr><th>Forfait</th><th>Durée</th><th>Tarif</th><th></th></tr></thead>
@@ -1049,9 +1037,13 @@ function continuerReservation() {
   const prestationListe = cart.map(i => i.name + ' (' + i.price + ' €)').join(' + ');
   // Durée réelle : somme des durées propres à chaque prestation du panier
   const dureeEstimee = cart.reduce((s, i) => s + (i.duree || 0), 0);
+  // Détail prestation par prestation, pour que reservation.html crée une ligne
+  // séparée par prestation (planning avec blocs distincts, comme dans l'admin)
+  const detail = cart.map(i => ({ nom: i.name, prix: i.price, duree_min: i.duree || 0 }));
   sessionStorage.setItem('rdv_prestation_nom', prestationListe);
   sessionStorage.setItem('rdv_prestation_duree', String(dureeEstimee));
   sessionStorage.setItem('rdv_panier', prestationListe);
+  sessionStorage.setItem('rdv_panier_detail', JSON.stringify(detail));
   sessionStorage.setItem('rdv_total', String(total));
   sessionStorage.setItem('rdv_acompte', String(acompte));
   window.location.href = 'reservation.html';
