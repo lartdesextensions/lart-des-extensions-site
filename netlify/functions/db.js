@@ -8,7 +8,9 @@ const TABLES = {
   indisponibilites: ['id','date','heure_debut','heure_fin','motif'],
   clients_bloques: ['id','email','telephone','raison','created_at'],
   clients: ['id','prenom','nom','telephone','email','notes','created_at','updated_at'],
-  settings: ['key','value']
+  settings: ['key','value'],
+  produits: ['id','nom','prix','actif','ordre'],
+  ventes_produits: ['id','produit_nom','prix','quantite','date','reservation_id','prenom','nom','created_at']
 };
 
 const OPS = { eq: '=', neq: '!=', gte: '>=', lte: '<=', gt: '>', lt: '<' };
@@ -24,16 +26,27 @@ function checkCols(table, obj) {
   }
 }
 
-function buildWhere(filters) {
+// Les noms de colonnes des filtres et du tri sont vérifiés : ils étaient insérés
+// tels quels dans la requête SQL.
+function buildWhere(filters, allowedCols) {
   if (!filters || !filters.length) return { sql: '', args: [] };
   const parts = [];
   const args = [];
   for (const f of filters) {
     if (!OPS[f.op]) throw new Error('Opérateur non autorisé : ' + f.op);
+    if (!allowedCols.includes(f.col)) throw new Error('Filtre non autorisé : ' + f.col);
     parts.push(`${f.col} ${OPS[f.op]} ?`);
     args.push(f.value);
   }
   return { sql: 'WHERE ' + parts.join(' AND '), args };
+}
+
+function buildOrder(order, allowedCols) {
+  if (!order || !order.length) return '';
+  return ' ORDER BY ' + order.map(o => {
+    if (!allowedCols.includes(o.col)) throw new Error('Tri non autorisé : ' + o.col);
+    return `${o.col} ${o.ascending === false ? 'DESC' : 'ASC'}`;
+  }).join(', ');
 }
 
 exports.handler = async function (event) {
@@ -48,11 +61,9 @@ exports.handler = async function (event) {
     const db = getDb();
 
     if (action === 'select') {
-      const { sql: whereSql, args } = buildWhere(filters);
+      const { sql: whereSql, args } = buildWhere(filters, cols);
       let sql = `SELECT * FROM ${table} ${whereSql}`;
-      if (order && order.length) {
-        sql += ' ORDER BY ' + order.map(o => `${o.col} ${o.ascending === false ? 'DESC' : 'ASC'}`).join(', ');
-      }
+      sql += buildOrder(order, cols);
       if (limit) sql += ' LIMIT ' + Number(limit);
       const res = await db.execute({ sql, args });
       const rows = res.rows;
@@ -75,7 +86,7 @@ exports.handler = async function (event) {
     if (action === 'update') {
       checkCols(table, payload);
       const keys = Object.keys(payload);
-      const { sql: whereSql, args: whereArgs } = buildWhere(filters);
+      const { sql: whereSql, args: whereArgs } = buildWhere(filters, cols);
       const sql = `UPDATE ${table} SET ${keys.map(k => `${k} = ?`).join(',')} ${whereSql} RETURNING *`;
       const res = await db.execute({ sql, args: [...keys.map(k => payload[k]), ...whereArgs] });
       return json({ data: single ? (res.rows[0] || null) : res.rows });
@@ -88,6 +99,7 @@ exports.handler = async function (event) {
         checkCols(table, row);
         const keys = Object.keys(row);
         const conflictCol = onConflict || 'id';
+        if (!cols.includes(conflictCol)) throw new Error('Colonne de conflit non autorisée.');
         const updateCols = keys.filter(k => k !== conflictCol);
         const sql = `INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})
           ON CONFLICT(${conflictCol}) DO UPDATE SET ${updateCols.map(k => `${k} = excluded.${k}`).join(',')}
@@ -99,7 +111,7 @@ exports.handler = async function (event) {
     }
 
     if (action === 'delete') {
-      const { sql: whereSql, args } = buildWhere(filters);
+      const { sql: whereSql, args } = buildWhere(filters, cols);
       const sql = `DELETE FROM ${table} ${whereSql} RETURNING *`;
       const res = await db.execute({ sql, args });
       return json({ data: res.rows });
@@ -108,9 +120,7 @@ exports.handler = async function (event) {
     return json({ error: 'Action inconnue : ' + action }, 400);
   } catch (err) {
     console.error('Erreur db.js:', err);
-    // DEBUG TEMPORAIRE : renvoie le détail complet de l'erreur pour contourner
-    // l'indisponibilité des logs Netlify. A retirer une fois le bug corrigé.
-    return json({ error: err.message, errorName: err.name, errorStack: err.stack }, 500);
+    return json({ error: err.message }, 500);
   }
 };
 
