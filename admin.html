@@ -722,7 +722,7 @@ tr:hover td{background:var(--cream);}
   </div>
 </div>
 
-<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v15-produits</div>
+<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v16-fix-edit</div>
 <script>
 // ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify) ──
 async function dbCall(table, action, opts) {
@@ -1291,14 +1291,21 @@ let nrExistingProduitVentes = []; // produits déjà enregistrés en base pour c
 
 async function ensureNrProduitsLoaded() {
   if (nrProduits.length > 0) return;
-  const { data } = await dbCall('produits', 'select', {
-    filters: [{ col: 'actif', op: 'eq', value: true }],
-    order: [{ col: 'ordre' }]
-  });
-  nrProduits = data || [];
-  document.getElementById('nr-add-produit').innerHTML =
-    '<option value="">— Choisir un produit —</option>' +
-    nrProduits.map((p, i) => `<option value="${i}">${p.nom} — ${p.prix} €</option>`).join('');
+  try {
+    const { data } = await dbCall('produits', 'select', {
+      filters: [{ col: 'actif', op: 'eq', value: true }],
+      order: [{ col: 'ordre' }]
+    });
+    nrProduits = data || [];
+    document.getElementById('nr-add-produit').innerHTML =
+      '<option value="">— Choisir un produit —</option>' +
+      nrProduits.map((p, i) => `<option value="${i}">${p.nom} — ${p.prix} €</option>`).join('');
+  } catch (err) {
+    // La table "produits" peut ne pas encore exister (migration pas encore lancée) :
+    // ça ne doit jamais bloquer l'ouverture du formulaire de rendez-vous.
+    console.error('Produits indisponibles (migration à lancer ?):', err);
+    nrProduits = [];
+  }
 }
 
 function addProduitToRdv() {
