@@ -722,7 +722,7 @@ tr:hover td{background:var(--cream);}
   </div>
 </div>
 
-<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v17-total-groupe</div>
+<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v18-scalapay</div>
 <script>
 // ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify) ──
 async function dbCall(table, action, opts) {
@@ -874,7 +874,7 @@ function dateCreation(r) {
 }
 
 function estPayeeEnLigne(r) {
-  return r.payment_method === 'stripe';
+  return r.payment_method === 'stripe' || r.payment_method === 'scalapay';
 }
 
 function etatCloche() {
@@ -2075,7 +2075,7 @@ async function openModal(r) {
     ? `<br><strong>Acompte remboursé :</strong> ${r.acompte_rembourse === true ? 'Oui' : (r.acompte_rembourse === false ? 'Non' : '—')}`
     : '';
   const paiementLigne = r.acompte_paye
-    ? `<span style="color:var(--success);">✓ Payé (${r.payment_method === 'stripe' ? 'carte' : 'manuel'})</span>`
+    ? `<span style="color:var(--success);">✓ Payé (${r.payment_method === 'stripe' ? 'carte' : (r.payment_method === 'scalapay' ? 'Scalapay' : 'manuel')})</span>`
     : `<span style="color:var(--error);">Non payé</span>`;
 
   // Si ce rendez-vous fait partie d'une visite à plusieurs prestations (groupe_id),
