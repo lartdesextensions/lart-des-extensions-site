@@ -946,7 +946,7 @@ async function payWithScalapay() {
     loading.style.display = 'none';
     document.getElementById('payment-choice').style.display = 'block';
     showPaymentMethods();
-    showPaymentError("Le paiement en plusieurs fois n'a pas pu être initié. Essayez par carte ou contactez le salon.");
+    showPaymentError("Le paiement en plusieurs fois n'a pas pu être initié. Essayez par carte ou contactez le salon. (Détail : " + (e && e.message ? e.message : 'inconnu') + ")");
   }
 }
 
