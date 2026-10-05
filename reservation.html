@@ -249,7 +249,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
           <button type="button" class="pay-opt" id="opt-total" onclick="setPaymentType('total')">
             <span class="pay-opt-t">Totalité</span>
             <span class="pay-opt-a" id="opt-total-amt">—</span>
-            <span class="pay-opt-s">Rien à régler sur place</span>
+            <span class="pay-opt-s">Rien à régler sur place · paiement en 3 ou 4 fois possible</span>
           </button>
         </div>
         <div class="note-box" id="note-paiement"></div>
@@ -274,6 +274,14 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
             <span class="pm-txt">
               <span class="pm-t">Carte bancaire</span>
               <span class="pm-s">Visa, Mastercard, CB</span>
+            </span>
+          </button>
+
+          <button type="button" class="pay-method" id="pm-scalapay" onclick="payWithScalapay()" style="display:none;">
+            <span class="pm-ico">🗓️</span>
+            <span class="pm-txt">
+              <span class="pm-t">Payer en 3 ou 4 fois</span>
+              <span class="pm-s">Avec Scalapay — la totalité de la prestation, étalée</span>
             </span>
           </button>
         </div>
@@ -351,6 +359,7 @@ function loadPrestationFromCart() {
   const nom = sessionStorage.getItem('rdv_prestation_nom');
   const total = sessionStorage.getItem('rdv_total');
   const duree = sessionStorage.getItem('rdv_prestation_duree');
+  const detailRaw = sessionStorage.getItem('rdv_panier_detail');
 
   if (!nom || !total) {
     document.getElementById('no-prest-msg').style.display = 'block';
@@ -364,6 +373,27 @@ function loadPrestationFromCart() {
     prix: Number(total),
     duree_min: Number(duree) || 60
   };
+
+  // Détail par prestation (si disponible) : permet d'enregistrer une ligne
+  // séparée par prestation, reliées par un groupe_id, comme dans l'admin.
+  selected.services = null;
+  if (detailRaw) {
+    try {
+      const parsed = JSON.parse(detailRaw);
+      if (Array.isArray(parsed) && parsed.length) {
+        selected.services = parsed.map(s => ({
+          nom: s.nom,
+          prix: Number(s.prix) || 0,
+          duree_min: Number(s.duree_min) || 0
+        }));
+      }
+    } catch (e) {
+      console.error('Détail panier illisible', e);
+    }
+  }
+  if (!selected.services || !selected.services.length) {
+    selected.services = [selected.prestation];
+  }
 
   document.getElementById('prest-summary').style.display = 'block';
   document.getElementById('prest-summary-nom').textContent = nom;
@@ -702,6 +732,10 @@ const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','a
 let currentReservationId = null;
 let appConfig = null;
 let paymentType = 'acompte'; // 'acompte' (35 %) ou 'total'
+// Montants (en €) entre lesquels Scalapay est proposé ; Scalapay refuse de toute façon
+// ce qui sort de ses limites, ces bornes évitent juste d'afficher un bouton inutile.
+const SCALAPAY_MIN = 30;
+const SCALAPAY_MAX = 2000;
 
 async function getAppConfig() {
   if (appConfig) return appConfig;
@@ -768,6 +802,11 @@ function showPaymentMethods() {
   const appleOk = window.ApplePaySession && window.ApplePaySession.canMakePayments();
   document.getElementById('pm-apple').style.display = appleOk ? 'flex' : 'none';
 
+  // Scalapay : uniquement pour le règlement de la totalité, dans les montants acceptés
+  const total = selected.prestation ? selected.prestation.prix : 0;
+  const scalapayOk = paymentType === 'total' && total >= SCALAPAY_MIN && total <= SCALAPAY_MAX;
+  document.getElementById('pm-scalapay').style.display = scalapayOk ? 'flex' : 'none';
+
   document.getElementById('pay-step-method').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -780,6 +819,9 @@ function backToAmount() {
 
 
 // Enregistre la réservation une seule fois (statut "en_attente" tant que l'acompte n'est pas payé)
+// S'il y a plusieurs prestations dans le panier, une ligne est créée par prestation,
+// reliées par un même groupe_id (comme dans l'admin) — la première ligne porte
+// l'acompte et sert de référence pour le paiement (create-checkout / webhooks).
 async function ensureReservationSaved() {
   if (currentReservationId) return currentReservationId;
 
@@ -789,24 +831,51 @@ async function ensureReservationSaved() {
   const tel = document.getElementById('f-tel').value.trim();
   const message = document.getElementById('f-message').value.trim();
   const p = selected.prestation;
+  const services = (selected.services && selected.services.length) ? selected.services : [p];
   const acompte = Math.round(p.prix * 0.35);
 
-  const { data } = await dbCall('reservations', 'insert', {
-    single: true,
-    payload: {
-      prenom, nom, email, telephone: tel, message,
-      prestation_nom: p.nom,
-      date: selected.date,
-      heure: selected.heure,
-      duree_min: p.duree_min,
-      prix: p.prix,
-      acompte,
-      statut: 'en_attente',
-      acompte_paye: 0
+  if (services.length === 1) {
+    const { data } = await dbCall('reservations', 'insert', {
+      single: true,
+      payload: {
+        prenom, nom, email, telephone: tel, message,
+        prestation_nom: services[0].nom,
+        date: selected.date,
+        heure: selected.heure,
+        duree_min: services[0].duree_min,
+        prix: services[0].prix,
+        acompte,
+        statut: 'en_attente',
+        acompte_paye: 0
+      }
+    });
+    currentReservationId = data.id;
+  } else {
+    const groupeId = 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    let cursorMin = timeToMin(selected.heure);
+    for (let i = 0; i < services.length; i++) {
+      const s = services[i];
+      const hh = String(Math.floor(cursorMin / 60)).padStart(2, '0');
+      const mm = String(cursorMin % 60).padStart(2, '0');
+      const { data } = await dbCall('reservations', 'insert', {
+        single: true,
+        payload: {
+          prenom, nom, email, telephone: tel, message: i === 0 ? message : '',
+          prestation_nom: s.nom,
+          date: selected.date,
+          heure: `${hh}:${mm}`,
+          duree_min: s.duree_min,
+          prix: s.prix,
+          acompte: i === 0 ? acompte : 0,
+          statut: 'en_attente',
+          acompte_paye: 0,
+          groupe_id: groupeId
+        }
+      });
+      if (i === 0) currentReservationId = data.id;
+      cursorMin += s.duree_min;
     }
-  });
-
-  currentReservationId = data.id;
+  }
 
   // Crée ou met à jour la fiche client (best-effort, ne bloque jamais le parcours de paiement)
   fetch('/.netlify/functions/upsert-client', {
@@ -855,6 +924,32 @@ async function payWithStripe() {
   }
 }
 
+// ── PAIEMENT SCALAPAY (la totalité, en 3 ou 4 fois) ──
+async function payWithScalapay() {
+  const loading = document.getElementById('payment-loading');
+  document.getElementById('payment-msg').style.display = 'none';
+  document.getElementById('payment-choice').style.display = 'none';
+  loading.style.display = 'block';
+
+  try {
+    const reservationId = await ensureReservationSaved();
+    const res = await fetch('/.netlify/functions/create-scalapay-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reservationId, siteUrl: window.location.origin })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.url) throw new Error(data.error || 'Impossible de créer le paiement.');
+    window.location.href = data.url;
+  } catch (e) {
+    console.error('Erreur paiement Scalapay', e);
+    loading.style.display = 'none';
+    document.getElementById('payment-choice').style.display = 'block';
+    showPaymentMethods();
+    showPaymentError("Le paiement en plusieurs fois n'a pas pu être initié. Essayez par carte ou contactez le salon.");
+  }
+}
+
 function showSuccessPanel() {
   const prenom = document.getElementById('f-prenom').value.trim() || '';
   document.getElementById('success-prenom').textContent = prenom + ' !';
@@ -870,6 +965,40 @@ async function handlePaymentReturn() {
   const payment = params.get('payment');
   const rdv = params.get('rdv');
   if (!payment) return;
+
+  // Retour de Scalapay : on encaisse la commande côté serveur avant de confirmer.
+  if (payment === 'success' && rdv && params.get('provider') === 'scalapay') {
+    const status = (params.get('status') || 'SUCCESS').toUpperCase();
+    if (status !== 'SUCCESS') {
+      goStep(3);
+      showPaymentError("Le paiement en plusieurs fois n'a pas abouti. Vous pouvez réessayer ci-dessous.");
+      return;
+    }
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel3').classList.add('active');
+    document.getElementById('payment-choice').style.display = 'none';
+    document.getElementById('payment-loading').style.display = 'block';
+    try {
+      const res = await fetch('/.netlify/functions/capture-scalapay-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reservationId: rdv })
+      });
+      const out = await res.json();
+      if (!res.ok) throw new Error(out.error || 'Paiement non abouti.');
+      document.getElementById('payment-loading').style.display = 'none';
+      const { data } = await dbCall('reservations', 'select', { single: true, filters: [{ col: 'id', op: 'eq', value: rdv }] });
+      if (data) document.getElementById('success-prenom').textContent = `${data.prenom} !`;
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('panel4').classList.add('active');
+    } catch (e) {
+      console.error('Erreur capture Scalapay', e);
+      document.getElementById('payment-loading').style.display = 'none';
+      showPaymentError("Le paiement en plusieurs fois n'a pas pu être finalisé. Si Scalapay vous a débitée ou si le problème persiste, contactez le salon.");
+    }
+    return;
+  }
 
   if (payment === 'success' && rdv) {
     const { data } = await dbCall('reservations', 'select', {
