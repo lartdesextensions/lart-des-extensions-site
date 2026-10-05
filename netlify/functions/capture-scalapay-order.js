@@ -1,7 +1,7 @@
 const { getDb } = require('./lib/turso');
 const { sendConfirmationEmail, sendClientConfirmationEmail } = require('./lib/email');
 
-const SCALAPAY_API = process.env.SCALAPAY_API_URL || 'https://integration.api.scalapay.com';
+const SCALAPAY_API = process.env.SCALAPAY_API_URL || 'https://api.scalapay.com';
 
 // Appelée quand la cliente revient de Scalapay : encaisse la commande, puis
 // confirme le(s) rendez-vous et envoie les emails (comme le webhook Stripe).
