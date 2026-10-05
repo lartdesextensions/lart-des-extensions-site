@@ -4,6 +4,12 @@ const { getDb } = require('./lib/turso');
 // Jamais dans le code ni dans un fichier du dépôt.
 const SCALAPAY_API = process.env.SCALAPAY_API_URL || 'https://api.scalapay.com';
 
+// Scalapay exige que la formule demandée corresponde au contrat marchand.
+// On essaie les formules dans cet ordre et on garde la première acceptée.
+// Pour en imposer une seule : variable Netlify SCALAPAY_PRODUCTS (ex. "pay-in-4").
+const PRODUCTS = (process.env.SCALAPAY_PRODUCTS || 'pay-in-3,pay-in-4')
+  .split(',').map((p) => p.trim()).filter(Boolean);
+
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -80,23 +86,36 @@ exports.handler = async function (event) {
       type: 'online'
     };
 
-    const res = await fetch(`${SCALAPAY_API}/v2/orders`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.SCALAPAY_API_KEY}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json().catch(() => ({}));
+    // Une tentative par formule : on s'arrête à la première que Scalapay accepte.
+    let res, data, product;
+    for (product of PRODUCTS) {
+      res = await fetch(`${SCALAPAY_API}/v2/orders`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.SCALAPAY_API_KEY}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify({ ...body, product })
+      });
+      data = await res.json().catch(() => ({}));
+      if (res.ok && data.checkoutUrl && data.token) break;
+      console.error(`Erreur Scalapay create order (${product}):`, res.status, JSON.stringify(data));
+      // Seul le refus de formule justifie d'essayer la suivante.
+      if (!/product_not_supported/i.test(JSON.stringify(data))) break;
+    }
+
     if (!res.ok || !data.checkoutUrl || !data.token) {
-      console.error('Erreur Scalapay create order:', res.status, JSON.stringify(data));
+      const refusFormule = /product_not_supported/i.test(JSON.stringify(data));
       return {
         statusCode: 502,
-        body: JSON.stringify({ error: `Scalapay (${res.status}) : ` + (data.message || JSON.stringify(data) || 'commande refusée') })
+        body: JSON.stringify({
+          error: `Scalapay (${res.status}) : ` + (data.message || JSON.stringify(data) || 'commande refusée') +
+            (refusFormule ? ` [formules essayées : ${PRODUCTS.join(', ')}]` : '')
+        })
       };
     }
+    console.log('Scalapay : commande créée avec la formule', product);
 
     // On garde le jeton de la commande côté serveur : c'est lui (et non ce que
     // renvoie le navigateur) qui servira à encaisser au retour de la cliente.
