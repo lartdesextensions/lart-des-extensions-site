@@ -72,6 +72,8 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
   border:1px solid var(--beige-mid);
   padding:18px 12px;
   text-align:center;
+  display:flex;align-items:center;justify-content:center;
+  text-wrap:balance;
   cursor:pointer;transition:all 0.2s;
   font-size:11px;font-weight:500;
   letter-spacing:0.1em;text-transform:uppercase;
@@ -296,7 +298,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
     <div class="cat-card" onclick="showCat('lissage',this)">Lissage</div>
     <div class="cat-card" onclick="showCat('coloration',this)">Coloration</div>
     <div class="cat-card" onclick="showCat('balayage',this)">Balayage & Ombré</div>
-    <div class="cat-card" onclick="showCat('coiffage',this)">Coupe & Coiffage</div>
+    <div class="cat-card" onclick="showCat('coiffage',this)">Shampoing, Coupe & Patine</div>
     <div class="cat-card" onclick="showCat('soins',this)">Soins</div>
     <div class="cat-card" onclick="showCat('formations',this)">Formations</div>
   </div>
@@ -774,7 +776,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
 
   <!-- ── COIFFAGE ── -->
   <div class="cat-panel" id="cat-coiffage">
-    <h2 class="panel-title">Coupe & Coiffage</h2>
+    <h2 class="panel-title">Shampoing, Coupe & Patine</h2>
     <div class="sub-nav">
       <button class="sub-btn active" onclick="showSub('coiffage','brushing',this)">Shampoing & Brushing</button>
       <button class="sub-btn" onclick="showSub('coiffage','patine',this)">Shampoing & Patine</button>
