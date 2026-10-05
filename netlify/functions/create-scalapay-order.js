@@ -2,7 +2,7 @@ const { getDb } = require('./lib/turso');
 
 // Clé secrète : uniquement dans les variables d'environnement Netlify (SCALAPAY_API_KEY).
 // Jamais dans le code ni dans un fichier du dépôt.
-const SCALAPAY_API = process.env.SCALAPAY_API_URL || 'https://integration.api.scalapay.com';
+const SCALAPAY_API = process.env.SCALAPAY_API_URL || 'https://api.scalapay.com';
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
