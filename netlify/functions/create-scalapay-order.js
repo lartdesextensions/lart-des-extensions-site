@@ -94,7 +94,7 @@ exports.handler = async function (event) {
       console.error('Erreur Scalapay create order:', res.status, JSON.stringify(data));
       return {
         statusCode: 502,
-        body: JSON.stringify({ error: data.message || 'Scalapay a refusé la commande.' })
+        body: JSON.stringify({ error: `Scalapay (${res.status}) : ` + (data.message || JSON.stringify(data) || 'commande refusée') })
       };
     }
 
