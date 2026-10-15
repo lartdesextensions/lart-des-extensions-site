@@ -117,6 +117,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
 .pay-method{display:flex;align-items:center;gap:14px;width:100%;padding:15px 16px;margin-bottom:10px;background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;cursor:pointer;font-family:'Poppins',sans-serif;text-align:left;transition:border-color .2s,box-shadow .2s;}
 .pay-method:hover{border-color:var(--dark);box-shadow:0 2px 10px rgba(0,0,0,.06);}
 .pm-ico{flex:0 0 54px;text-align:center;font-size:1.4rem;line-height:1;}
+.pm-ico-pp{font-size:.82rem;font-weight:700;font-style:italic;color:#003087;}
 .pm-txt{display:flex;flex-direction:column;gap:2px;}
 .pm-t{font-size:.9rem;font-weight:600;color:var(--dark);}
 .pm-s{font-size:.72rem;color:var(--taupe-dark);line-height:1.35;}
@@ -249,7 +250,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
           <button type="button" class="pay-opt" id="opt-total" onclick="setPaymentType('total')">
             <span class="pay-opt-t">Totalité</span>
             <span class="pay-opt-a" id="opt-total-amt">—</span>
-            <span class="pay-opt-s">Rien à régler sur place · paiement en 3 ou 4 fois possible</span>
+            <span class="pay-opt-s">Rien à régler sur place</span>
           </button>
         </div>
         <div class="note-box" id="note-paiement"></div>
@@ -269,6 +270,14 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
             </span>
           </button>
 
+          <button type="button" class="pay-method" id="pm-paypal" onclick="choosePaypal()">
+            <span class="pm-ico pm-ico-pp">PayPal</span>
+            <span class="pm-txt">
+              <span class="pm-t">PayPal</span>
+              <span class="pm-s">Possibilité de payer en 4 fois sans frais</span>
+            </span>
+          </button>
+
           <button type="button" class="pay-method" id="pm-card" onclick="payWithStripe()">
             <span class="pm-ico">💳</span>
             <span class="pm-txt">
@@ -276,14 +285,14 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
               <span class="pm-s">Visa, Mastercard, CB</span>
             </span>
           </button>
+        </div>
 
-          <button type="button" class="pay-method" id="pm-scalapay" onclick="payWithScalapay()" style="display:none;">
-            <span class="pm-ico">🗓️</span>
-            <span class="pm-txt">
-              <span class="pm-t">Payer en 3 ou 4 fois</span>
-              <span class="pm-s">Avec Scalapay — la totalité de la prestation, étalée</span>
-            </span>
-          </button>
+        <div id="paypal-wrap" style="display:none;">
+          <div class="pm-head" style="margin-top:0;">Poursuivre avec PayPal</div>
+          <div id="paypal-button-container"></div>
+          <div id="paypal-loading" style="text-align:center;padding:14px;color:var(--taupe-dark);font-size:.8rem;">
+            <div class="spinner" style="width:20px;height:20px;margin:0 auto 8px;"></div>Chargement de PayPal...
+          </div>
         </div>
 
         <button class="btn btn-outline" style="margin-top:16px;" onclick="backToAmount()">← Retour</button>
@@ -359,7 +368,6 @@ function loadPrestationFromCart() {
   const nom = sessionStorage.getItem('rdv_prestation_nom');
   const total = sessionStorage.getItem('rdv_total');
   const duree = sessionStorage.getItem('rdv_prestation_duree');
-  const detailRaw = sessionStorage.getItem('rdv_panier_detail');
 
   if (!nom || !total) {
     document.getElementById('no-prest-msg').style.display = 'block';
@@ -373,27 +381,6 @@ function loadPrestationFromCart() {
     prix: Number(total),
     duree_min: Number(duree) || 60
   };
-
-  // Détail par prestation (si disponible) : permet d'enregistrer une ligne
-  // séparée par prestation, reliées par un groupe_id, comme dans l'admin.
-  selected.services = null;
-  if (detailRaw) {
-    try {
-      const parsed = JSON.parse(detailRaw);
-      if (Array.isArray(parsed) && parsed.length) {
-        selected.services = parsed.map(s => ({
-          nom: s.nom,
-          prix: Number(s.prix) || 0,
-          duree_min: Number(s.duree_min) || 0
-        }));
-      }
-    } catch (e) {
-      console.error('Détail panier illisible', e);
-    }
-  }
-  if (!selected.services || !selected.services.length) {
-    selected.services = [selected.prestation];
-  }
 
   document.getElementById('prest-summary').style.display = 'block';
   document.getElementById('prest-summary-nom').textContent = nom;
@@ -419,50 +406,94 @@ async function getWeeklyHours() {
   (data || []).forEach(s => weeklyHoursMap[s.key] = s.value);
   return weeklyHoursMap;
 }
+function isTrue(v) {
+  return v === true || v === 1 || v === '1' || v === 'true';
+}
 function isWeekdayClosed(map, dow) {
   const v = map[`hours_${dow}_ferme`];
   if (v === undefined) return dow === 0;
-  return v === 'true';
+  return isTrue(v);
+}
+// Si plusieurs lignes existent pour une même date, une fermeture l'emporte toujours
+function findAvail(list, dateStr) {
+  const rows = (list || []).filter(a => a.date === dateStr);
+  return rows.find(a => isTrue(a.ferme)) || rows[0];
+}
+// Règle unique « ce jour est-il fermé ? » (calendrier + vérification finale)
+function isDayClosed(weekly, dow, avail) {
+  if (avail && isTrue(avail.ferme)) return true;
+  if (isWeekdayClosed(weekly, dow)) {
+    // Jour fermé chaque semaine : ouvert uniquement si une ouverture exceptionnelle avec horaires est saisie
+    return !(avail && avail.heure_debut && avail.heure_fin);
+  }
+  return false;
+}
+function parseLocalDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
+// Numéro du dernier affichage demandé : un affichage plus ancien (ex. mois précédent
+// encore en chargement quand la cliente clique sur ›) est abandonné au lieu de
+// s'ajouter dans la grille avec les fermetures d'un autre mois.
+let calRenderToken = 0;
+
 async function renderCalendar() {
-  document.getElementById('cal-title').textContent = `${MONTH_NAMES[calMonth]} ${calYear}`;
+  const token = ++calRenderToken;
+  const y = calYear, mo = calMonth; // figés : ne changent plus pendant le chargement
+  document.getElementById('cal-title').textContent = `${MONTH_NAMES[mo]} ${y}`;
   const grid = document.getElementById('cal-grid');
   grid.innerHTML = DAY_NAMES.map(d => `<div class="cal-day-name">${d}</div>`).join('');
 
   const weekly = await getWeeklyHours();
 
   // Fetch availability for this month
-  const monthKey = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
-  const monthStart = `${calYear}-${String(calMonth+1).padStart(2,'0')}-01`;
-  const monthEnd = `${calYear}-${String(calMonth+1).padStart(2,'0')}-31`;
+  const mm = String(mo + 1).padStart(2, '0');
+  const monthKey = `${y}-${mm}`;
+  const monthStart = `${y}-${mm}-01`;
+  const monthEnd = `${y}-${mm}-31`;
   if (!availabilityCache[monthKey]) {
-    const { data } = await dbCall('disponibilites', 'select', {
+    availabilityCache[monthKey] = dbCall('disponibilites', 'select', {
       filters: [{ col: 'date', op: 'gte', value: monthStart }, { col: 'date', op: 'lte', value: monthEnd }]
-    });
-    availabilityCache[monthKey] = data || [];
+    }).then(r => r.data || []).catch(e => { delete availabilityCache[monthKey]; throw e; });
   }
+  const dispos = await availabilityCache[monthKey];
 
   // Fetch bookings for the whole month at once, pour pouvoir détecter les jours complets
   await ensureMonthBookingsLoaded(monthKey, monthStart, monthEnd);
 
-  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=dim
+  // Un autre mois a été demandé entre-temps : on n'affiche rien
+  if (token !== calRenderToken) return;
+
+  const frag = document.createDocumentFragment();
+  DAY_NAMES.forEach(n => {
+    const h = document.createElement('div');
+    h.className = 'cal-day-name';
+    h.textContent = n;
+    frag.appendChild(h);
+  });
+
+  const firstDay = new Date(y, mo, 1).getDay(); // 0=dim
   const adjust = (firstDay === 0) ? 6 : firstDay - 1; // make monday=0
-  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-  const todayStr = formatDate(today);
+  const daysInMonth = new Date(y, mo + 1, 0).getDate();
+  const todayStr = formatDate(new Date());
   const duree = selected.prestation ? selected.prestation.duree_min : 60;
 
-  for (let i = 0; i < adjust; i++) grid.insertAdjacentHTML('beforeend', '<div class="cal-day empty"></div>');
+  for (let i = 0; i < adjust; i++) {
+    const e = document.createElement('div');
+    e.className = 'cal-day empty';
+    frag.appendChild(e);
+  }
 
   for (let d = 1; d <= daysInMonth; d++) {
-    const dt = new Date(calYear, calMonth, d);
+    const dt = new Date(y, mo, d);
     const dateStr = formatDate(dt);
     const dow = dt.getDay(); // 0=dim,6=sam
     const isPast = dateStr < todayStr;
 
-    // Check if closed (from disponibilites table with ferme=true, ou fermeture hebdomadaire par défaut)
-    const avail = availabilityCache[monthKey].find(a => a.date === dateStr);
-    const isClosed = avail ? avail.ferme : isWeekdayClosed(weekly, dow);
+    // Fermeture : date fermée dans l'admin, ou jour fermé chaque semaine
+    const avail = findAvail(dispos, dateStr);
+    const isClosed = isDayClosed(weekly, dow, avail);
 
     // Si le jour est ouvert, vérifie s'il reste au moins un créneau libre pour la prestation sélectionnée
     let isFull = false;
@@ -485,16 +516,23 @@ async function renderCalendar() {
     el.textContent = d;
     if (isFull && !isClosed) el.title = 'Complet — aucun créneau disponible';
     if (clickable) el.onclick = () => selectDate(dateStr, avail);
-    grid.appendChild(el);
+    frag.appendChild(el);
   }
+  grid.replaceChildren(frag);
 }
 
 // Charge en une seule fois les réservations + blocages horaires de tout le mois affiché,
 // et les range dans bookedCache par date (même format que renderSlots utilisait déjà).
 async function ensureMonthBookingsLoaded(monthKey, start, end) {
   const marker = '_month_' + monthKey;
-  if (bookedCache[marker]) return;
+  if (!bookedCache[marker]) {
+    bookedCache[marker] = loadMonthBookings(start, end)
+      .catch(e => { delete bookedCache[marker]; throw e; });
+  }
+  return bookedCache[marker];
+}
 
+async function loadMonthBookings(start, end) {
   const [{ data: rdvs }, { data: blocages }] = await Promise.all([
     dbCall('reservations', 'select', {
       filters: [
@@ -508,10 +546,13 @@ async function ensureMonthBookingsLoaded(monthKey, start, end) {
     })
   ]);
 
+  const now = Date.now();
+  const PENDING_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
   const activeRdvs = (rdvs || []).filter(r => {
-    // Une réservation non payée ne réserve jamais le créneau : la cliente doit
-    // pouvoir revenir le prendre plus tard si elle a abandonné en cours de route.
-    if (r.statut === 'en_attente' && !r.acompte_paye && !(Number(r.montant_paye) > 0)) return false;
+    if (r.statut === 'en_attente' && !r.acompte_paye && r.created_at) {
+      const created = new Date(String(r.created_at).replace(' ', 'T') + 'Z').getTime();
+      if (!isNaN(created) && (now - created) > PENDING_TIMEOUT_MS) return false;
+    }
     return true;
   });
 
@@ -523,8 +564,6 @@ async function ensureMonthBookingsLoaded(monthKey, start, end) {
     if (!bookedCache[b.date]) bookedCache[b.date] = [];
     bookedCache[b.date].push({ heure: b.heure_debut, duree_min: timeToMin(b.heure_fin) - timeToMin(b.heure_debut) });
   });
-
-  bookedCache[marker] = true;
 }
 
 // Calcule la liste des créneaux (libres + occupés) pour un jour donné, une durée de prestation
@@ -592,7 +631,7 @@ async function renderSlots(dateStr, avail) {
   grid.innerHTML = '<div class="slots-empty"><div class="spinner" style="width:20px;height:20px;margin:0 auto 8px;"></div>Chargement...</div>';
 
   // Get day availability
-  const dt = new Date(dateStr);
+  const dt = parseLocalDate(dateStr);
   const dow = dt.getDay(); // 0=dim
   const weekly = await getWeeklyHours();
 
@@ -608,9 +647,13 @@ async function renderSlots(dateStr, avail) {
         filters: [{ col: 'date', op: 'eq', value: dateStr }]
       })
     ]);
+    const now = Date.now();
+    const PENDING_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
     const activeRdvs = (rdvs || []).filter(r => {
-      // Une réservation non payée ne réserve jamais le créneau.
-      if (r.statut === 'en_attente' && !r.acompte_paye && !(Number(r.montant_paye) > 0)) return false;
+      if (r.statut === 'en_attente' && !r.acompte_paye && r.created_at) {
+        const created = new Date(String(r.created_at).replace(' ', 'T') + 'Z').getTime();
+        if (!isNaN(created) && (now - created) > PENDING_TIMEOUT_MS) return false;
+      }
       return true;
     });
     const rdvOccupations = activeRdvs.map(r => ({ heure: r.heure, duree_min: r.duree_min }));
@@ -730,12 +773,9 @@ async function checkBlockedAndProceed() {
 // ── RECAP ──
 const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 let currentReservationId = null;
+let paypalButtonsRendered = false;
 let appConfig = null;
 let paymentType = 'acompte'; // 'acompte' (35 %) ou 'total'
-// Montants (en €) entre lesquels Scalapay est proposé ; Scalapay refuse de toute façon
-// ce qui sort de ses limites, ces bornes évitent juste d'afficher un bouton inutile.
-const SCALAPAY_MIN = 30;
-const SCALAPAY_MAX = 2000;
 
 async function getAppConfig() {
   if (appConfig) return appConfig;
@@ -744,7 +784,7 @@ async function getAppConfig() {
     appConfig = await res.json();
   } catch (e) {
     console.error('Erreur chargement config paiement', e);
-    appConfig = { stripePublishableKey: '' };
+    appConfig = { stripePublishableKey: '', paypalClientId: '' };
   }
   return appConfig;
 }
@@ -797,15 +837,11 @@ function showPaymentMethods() {
   document.getElementById('pay-step-amount').style.display = 'none';
   document.getElementById('pay-step-method').style.display = 'block';
   document.getElementById('pm-list').style.display = 'block';
+  document.getElementById('paypal-wrap').style.display = 'none';
 
   // Apple Pay n'est proposé que si l'appareil le prend réellement en charge
   const appleOk = window.ApplePaySession && window.ApplePaySession.canMakePayments();
   document.getElementById('pm-apple').style.display = appleOk ? 'flex' : 'none';
-
-  // Scalapay : uniquement pour le règlement de la totalité, dans les montants acceptés
-  const total = selected.prestation ? selected.prestation.prix : 0;
-  const scalapayOk = paymentType === 'total' && total >= SCALAPAY_MIN && total <= SCALAPAY_MAX;
-  document.getElementById('pm-scalapay').style.display = scalapayOk ? 'flex' : 'none';
 
   document.getElementById('pay-step-method').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -817,13 +853,58 @@ function backToAmount() {
   document.getElementById('payment-loading').style.display = 'none';
 }
 
+function choosePaypal() {
+  document.getElementById('pm-list').style.display = 'none';
+  document.getElementById('paypal-wrap').style.display = 'block';
+  initPaypalButtons();
+}
+
+// Dernière vérification, avec des données fraîches (sans cache), juste avant d'enregistrer :
+// le jour doit être ouvert et le créneau toujours libre.
+const MSG_CRENEAU_INDISPO = "Ce créneau n'est plus disponible (salon fermé ce jour-là ou horaire déjà réservé). Merci de choisir une autre date.";
+async function verifierCreneauDisponible() {
+  const dateStr = selected.date, heure = selected.heure;
+  const duree = selected.prestation ? selected.prestation.duree_min : 60;
+  const err = new Error('creneau_indisponible');
+  err.userMessage = MSG_CRENEAU_INDISPO;
+  if (!dateStr || !heure || dateStr < formatDate(new Date())) throw err;
+
+  weeklyHoursMap = null; // relit les horaires hebdo
+  const [weekly, { data: dispos }, { data: rdvs }, { data: blocages }] = await Promise.all([
+    getWeeklyHours(),
+    dbCall('disponibilites', 'select', { filters: [{ col: 'date', op: 'eq', value: dateStr }] }),
+    dbCall('reservations', 'select', {
+      filters: [{ col: 'date', op: 'eq', value: dateStr }, { col: 'statut', op: 'neq', value: 'annule' }]
+    }),
+    dbCall('indisponibilites', 'select', { filters: [{ col: 'date', op: 'eq', value: dateStr }] })
+  ]);
+
+  const dow = parseLocalDate(dateStr).getDay();
+  const avail = findAvail(dispos, dateStr);
+  if (isDayClosed(weekly, dow, avail)) throw err;
+
+  const now = Date.now();
+  const actifs = (rdvs || []).filter(r => {
+    if (r.statut === 'en_attente' && !r.acompte_paye && r.created_at) {
+      const created = new Date(String(r.created_at).replace(' ', 'T') + 'Z').getTime();
+      if (!isNaN(created) && (now - created) > 20 * 60 * 1000) return false;
+    }
+    return true;
+  });
+  const occupations = actifs.map(r => ({ heure: r.heure, duree_min: r.duree_min }))
+    .concat((blocages || []).map(b => ({
+      heure: b.heure_debut,
+      duree_min: timeToMin(b.heure_fin) - timeToMin(b.heure_debut)
+    })));
+  const slot = computeDaySlots(dow, weekly, avail, occupations, duree).find(s => s.time === heure);
+  if (!slot || slot.booked) throw err;
+}
 
 // Enregistre la réservation une seule fois (statut "en_attente" tant que l'acompte n'est pas payé)
-// S'il y a plusieurs prestations dans le panier, une ligne est créée par prestation,
-// reliées par un même groupe_id (comme dans l'admin) — la première ligne porte
-// l'acompte et sert de référence pour le paiement (create-checkout / webhooks).
 async function ensureReservationSaved() {
   if (currentReservationId) return currentReservationId;
+
+  await verifierCreneauDisponible();
 
   const prenom = document.getElementById('f-prenom').value.trim();
   const nom = document.getElementById('f-nom').value.trim();
@@ -831,51 +912,24 @@ async function ensureReservationSaved() {
   const tel = document.getElementById('f-tel').value.trim();
   const message = document.getElementById('f-message').value.trim();
   const p = selected.prestation;
-  const services = (selected.services && selected.services.length) ? selected.services : [p];
   const acompte = Math.round(p.prix * 0.35);
 
-  if (services.length === 1) {
-    const { data } = await dbCall('reservations', 'insert', {
-      single: true,
-      payload: {
-        prenom, nom, email, telephone: tel, message,
-        prestation_nom: services[0].nom,
-        date: selected.date,
-        heure: selected.heure,
-        duree_min: services[0].duree_min,
-        prix: services[0].prix,
-        acompte,
-        statut: 'en_attente',
-        acompte_paye: 0
-      }
-    });
-    currentReservationId = data.id;
-  } else {
-    const groupeId = 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    let cursorMin = timeToMin(selected.heure);
-    for (let i = 0; i < services.length; i++) {
-      const s = services[i];
-      const hh = String(Math.floor(cursorMin / 60)).padStart(2, '0');
-      const mm = String(cursorMin % 60).padStart(2, '0');
-      const { data } = await dbCall('reservations', 'insert', {
-        single: true,
-        payload: {
-          prenom, nom, email, telephone: tel, message: i === 0 ? message : '',
-          prestation_nom: s.nom,
-          date: selected.date,
-          heure: `${hh}:${mm}`,
-          duree_min: s.duree_min,
-          prix: s.prix,
-          acompte: i === 0 ? acompte : 0,
-          statut: 'en_attente',
-          acompte_paye: 0,
-          groupe_id: groupeId
-        }
-      });
-      if (i === 0) currentReservationId = data.id;
-      cursorMin += s.duree_min;
+  const { data } = await dbCall('reservations', 'insert', {
+    single: true,
+    payload: {
+      prenom, nom, email, telephone: tel, message,
+      prestation_nom: p.nom,
+      date: selected.date,
+      heure: selected.heure,
+      duree_min: p.duree_min,
+      prix: p.prix,
+      acompte,
+      statut: 'en_attente',
+      acompte_paye: 0
     }
-  }
+  });
+
+  currentReservationId = data.id;
 
   // Crée ou met à jour la fiche client (best-effort, ne bloque jamais le parcours de paiement)
   fetch('/.netlify/functions/upsert-client', {
@@ -920,34 +974,71 @@ async function payWithStripe() {
     loading.style.display = 'none';
     document.getElementById('payment-choice').style.display = 'block';
     showPaymentMethods();
-    showPaymentError("Le paiement n'a pas pu être initié. Réessayez ou contactez le salon.");
+    showPaymentError(e.userMessage || "Le paiement n'a pas pu être initié. Réessayez ou contactez le salon.");
   }
 }
 
-// ── PAIEMENT SCALAPAY (la totalité, en 3 ou 4 fois) ──
-async function payWithScalapay() {
-  const loading = document.getElementById('payment-loading');
-  document.getElementById('payment-msg').style.display = 'none';
-  document.getElementById('payment-choice').style.display = 'none';
-  loading.style.display = 'block';
-
-  try {
-    const reservationId = await ensureReservationSaved();
-    const res = await fetch('/.netlify/functions/create-scalapay-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reservationId, siteUrl: window.location.origin })
-    });
-    const data = await res.json();
-    if (!res.ok || !data.url) throw new Error(data.error || 'Impossible de créer le paiement.');
-    window.location.href = data.url;
-  } catch (e) {
-    console.error('Erreur paiement Scalapay', e);
-    loading.style.display = 'none';
-    document.getElementById('payment-choice').style.display = 'block';
-    showPaymentMethods();
-    showPaymentError("Le paiement en plusieurs fois n'a pas pu être initié. Essayez par carte ou contactez le salon. (Détail : " + (e && e.message ? e.message : 'inconnu') + ")");
+// ── PAIEMENT PAYPAL ──
+async function initPaypalButtons() {
+  if (paypalButtonsRendered) return;
+  const config = await getAppConfig();
+  if (!config.paypalClientId) {
+    console.warn('PayPal non configuré (PAYPAL_CLIENT_ID manquant).');
+    document.getElementById('paypal-loading').style.display = 'none';
+    showPaymentError("PayPal est momentanément indisponible. Réessayez par carte.");
+    return;
   }
+
+  const script = document.createElement('script');
+  script.src = `https://www.paypal.com/sdk/js?client-id=${config.paypalClientId}&currency=EUR&components=buttons&enable-funding=paylater`;
+  script.onload = () => {
+    paypal.Buttons({
+      style: { layout: 'vertical', color: 'gold', label: 'paypal', height: 45 },
+      createOrder: async () => {
+        document.getElementById('payment-msg').style.display = 'none';
+        const reservationId = await ensureReservationSaved();
+        const res = await fetch('/.netlify/functions/create-paypal-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reservationId, paymentType })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.id) throw new Error(data.error || 'Erreur création commande PayPal.');
+        return data.id;
+      },
+      onApprove: async (data) => {
+        document.getElementById('payment-loading').style.display = 'block';
+        document.getElementById('payment-choice').style.display = 'none';
+        const res = await fetch('/.netlify/functions/capture-paypal-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderID: data.orderID, reservationId: currentReservationId })
+        });
+        const result = await res.json();
+        if (!res.ok || !result.success) {
+          document.getElementById('payment-loading').style.display = 'none';
+          document.getElementById('payment-choice').style.display = 'block';
+          showPaymentError("Le paiement PayPal n'a pas pu être finalisé. Contactez le salon.");
+          return;
+        }
+        showSuccessPanel();
+      },
+      onError: (err) => {
+        console.error('Erreur PayPal', err);
+        document.getElementById('payment-loading').style.display = 'none';
+        document.getElementById('payment-choice').style.display = 'block';
+        showPaymentError("Une erreur est survenue avec PayPal. Réessayez ou contactez le salon.");
+      }
+    }).render('#paypal-button-container').then(() => {
+      document.getElementById('paypal-loading').style.display = 'none';
+    });
+    paypalButtonsRendered = true;
+  };
+  script.onerror = () => {
+    document.getElementById('paypal-loading').style.display = 'none';
+    showPaymentError("PayPal n'a pas pu être chargé. Réessayez par carte.");
+  };
+  document.head.appendChild(script);
 }
 
 function showSuccessPanel() {
@@ -965,40 +1056,6 @@ async function handlePaymentReturn() {
   const payment = params.get('payment');
   const rdv = params.get('rdv');
   if (!payment) return;
-
-  // Retour de Scalapay : on encaisse la commande côté serveur avant de confirmer.
-  if (payment === 'success' && rdv && params.get('provider') === 'scalapay') {
-    const status = (params.get('status') || 'SUCCESS').toUpperCase();
-    if (status !== 'SUCCESS') {
-      goStep(3);
-      showPaymentError("Le paiement en plusieurs fois n'a pas abouti. Vous pouvez réessayer ci-dessous.");
-      return;
-    }
-    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    document.getElementById('panel3').classList.add('active');
-    document.getElementById('payment-choice').style.display = 'none';
-    document.getElementById('payment-loading').style.display = 'block';
-    try {
-      const res = await fetch('/.netlify/functions/capture-scalapay-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reservationId: rdv })
-      });
-      const out = await res.json();
-      if (!res.ok) throw new Error(out.error || 'Paiement non abouti.');
-      document.getElementById('payment-loading').style.display = 'none';
-      const { data } = await dbCall('reservations', 'select', { single: true, filters: [{ col: 'id', op: 'eq', value: rdv }] });
-      if (data) document.getElementById('success-prenom').textContent = `${data.prenom} !`;
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.getElementById('panel4').classList.add('active');
-    } catch (e) {
-      console.error('Erreur capture Scalapay', e);
-      document.getElementById('payment-loading').style.display = 'none';
-      showPaymentError("Le paiement en plusieurs fois n'a pas pu être finalisé. Si Scalapay vous a débitée ou si le problème persiste, contactez le salon.");
-    }
-    return;
-  }
 
   if (payment === 'success' && rdv) {
     const { data } = await dbCall('reservations', 'select', {
