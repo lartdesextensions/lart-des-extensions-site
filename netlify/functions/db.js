@@ -1,4 +1,5 @@
 const { getDb } = require('./lib/turso');
+const { isAdmin } = require('./lib/auth');
 
 // Tables autorisées et leurs colonnes (anti-injection : rien d'autre n'est accepté)
 const TABLES = {
@@ -49,6 +50,58 @@ function buildOrder(order, allowedCols) {
   }).join(', ');
 }
 
+
+// ── SÉCURITÉ ──
+// Sans session admin valide, seules les lectures nécessaires à la page de
+// réservation publique sont permises, avec des colonnes limitées.
+const SETTINGS_SECRETS = k => k === 'admin_password' || String(k).startsWith('auth_');
+const PUBLIC_RESA_COLS = ['id', 'date', 'heure', 'duree_min', 'statut', 'acompte_paye', 'created_at'];
+const PUBLIC_INSERT_RESA = ['prenom','nom','email','telephone','message','prestation_nom','date','heure','duree_min','prix','acompte','groupe_id'];
+
+function pick(row, cols) { const o = {}; cols.forEach(c => { if (row[c] !== undefined) o[c] = row[c]; }); return o; }
+
+async function publicRequest(db, body) {
+  const { table, action, filters, order, limit, single, payload } = body;
+  const cols = TABLES[table];
+
+  if (action === 'select' && ['disponibilites', 'indisponibilites', 'prestations', 'settings', 'reservations', 'clients_bloques'].includes(table)) {
+    if (table === 'clients_bloques') {
+      const f = (filters || [])[0];
+      if (!f || filters.length !== 1 || f.op !== 'eq' || !['email', 'telephone'].includes(f.col) || !f.value) {
+        return json({ error: 'Non autorisé' }, 401);
+      }
+    }
+    const { sql: whereSql, args } = buildWhere(filters, cols);
+    let sql = `SELECT * FROM ${table} ${whereSql}` + buildOrder(order, cols);
+    if (limit) sql += ' LIMIT ' + Number(limit);
+    let rows = (await db.execute({ sql, args })).rows;
+    if (table === 'settings') rows = rows.filter(r => !SETTINGS_SECRETS(r.key));
+    if (table === 'clients_bloques') rows = rows.map(r => ({ id: r.id }));
+    if (table === 'reservations') {
+      const byId = (filters || []).length === 1 && filters[0].col === 'id' && filters[0].op === 'eq';
+      rows = rows.map(r => pick(r, byId ? PUBLIC_RESA_COLS.concat(['prenom']) : PUBLIC_RESA_COLS));
+    }
+    return json({ data: single ? (rows[0] || null) : rows });
+  }
+
+  if (action === 'insert' && table === 'reservations') {
+    const rows = Array.isArray(payload) ? payload : [payload];
+    const inserted = [];
+    for (const raw of rows) {
+      const row = pick(raw || {}, PUBLIC_INSERT_RESA);
+      row.statut = 'en_attente';
+      row.acompte_paye = 0;
+      const keys = Object.keys(row);
+      const sql = `INSERT INTO reservations (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')}) RETURNING *`;
+      const r = (await db.execute({ sql, args: keys.map(k => row[k]) })).rows[0];
+      inserted.push(pick(r, PUBLIC_RESA_COLS.concat(['prenom'])));
+    }
+    return json({ data: single ? inserted[0] : inserted });
+  }
+
+  return json({ error: 'Non autorisé' }, 401);
+}
+
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -60,13 +113,24 @@ exports.handler = async function (event) {
     const cols = checkTable(table);
     const db = getDb();
 
+    if (!isAdmin(event)) return await publicRequest(db, body);
+
+    // Le mot de passe et les compteurs de connexion ne passent jamais par ici
+    if (table === 'settings' && action !== 'select') {
+      const rows = Array.isArray(payload) ? payload : [payload];
+      if (rows.some(r => r && SETTINGS_SECRETS(r.key)) || action === 'delete' || action === 'update') {
+        return json({ error: 'Non autorisé' }, 403);
+      }
+    }
+
     if (action === 'select') {
       const { sql: whereSql, args } = buildWhere(filters, cols);
       let sql = `SELECT * FROM ${table} ${whereSql}`;
       sql += buildOrder(order, cols);
       if (limit) sql += ' LIMIT ' + Number(limit);
       const res = await db.execute({ sql, args });
-      const rows = res.rows;
+      let rows = res.rows;
+      if (table === 'settings') rows = rows.filter(r => !SETTINGS_SECRETS(r.key));
       return json({ data: single ? (rows[0] || null) : rows });
     }
 
