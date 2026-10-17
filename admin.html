@@ -722,74 +722,93 @@ tr:hover td{background:var(--cream);}
   </div>
 </div>
 
-<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v18-scalapay</div>
+<div id="version-app" style="position:fixed;bottom:4px;right:6px;font-size:.6rem;color:#bbb;z-index:99999;pointer-events:none;">v19-securite</div>
 <script>
 // ── CLIENT BASE DE DONNÉES (Turso via fonction Netlify) ──
 async function dbCall(table, action, opts) {
   opts = opts || {};
   const res = await fetch('/.netlify/functions/db', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: adminHeaders(),
     body: JSON.stringify(Object.assign({ table, action }, opts))
   });
   const json = await res.json().catch(() => ({}));
+  if (res.status === 401) { sessionExpiree(); throw new Error('Session expirée'); }
   if (!res.ok) throw new Error(json.error || 'Erreur base de données');
   return json;
 }
 
 // ── AUTH ──
-const DEFAULT_ADMIN_PWD = 'Miamore10253!';
-
-async function getStoredAdminPwd() {
+// Connexion vérifiée côté serveur (fonction auth) : le mot de passe n'est
+// plus jamais lu par le navigateur. La session (jeton signé) dure 30 jours,
+// stockée dans localStorage pour éviter les reconnexions sur iPhone.
+function adminToken() {
   try {
-    const { data } = await dbCall('settings', 'select', {
-      filters: [{ col: 'key', op: 'eq', value: 'admin_password' }],
-      single: true
-    });
-    return (data && data.value) ? data.value : DEFAULT_ADMIN_PWD;
-  } catch (e) {
-    return DEFAULT_ADMIN_PWD;
-  }
+    const tok = localStorage.getItem('admin_token');
+    const exp = Number(localStorage.getItem('admin_token_exp'));
+    if (tok && exp && Date.now() < exp) return tok;
+  } catch (e) {}
+  return sessionStorage.getItem('admin_token') || '';
+}
+
+function adminHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken() };
+}
+
+function sessionExpiree() {
+  if (window.__sessionExpiree) return;
+  window.__sessionExpiree = true;
+  try {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_token_exp');
+    localStorage.removeItem('admin_session');
+  } catch (e) {}
+  sessionStorage.removeItem('admin_token');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-wrap').style.display = '';
 }
 
 async function login() {
   const entered = document.getElementById('pwd').value;
   const btn = document.querySelector('.login-box .btn');
+  const err = document.getElementById('login-err');
   if (btn) btn.disabled = true;
-  const currentPwd = await getStoredAdminPwd();
+  let data = {}, ok = false;
+  try {
+    const res = await fetch('/.netlify/functions/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'login', password: entered })
+    });
+    data = await res.json().catch(() => ({}));
+    ok = res.ok && !!data.token;
+  } catch (e) { data = { error: 'Connexion impossible, vérifiez internet.' }; }
   if (btn) btn.disabled = false;
-  if (entered === currentPwd) {
-    setAdminSession();
+  if (ok) {
+    setAdminSession(data.token, data.exp);
+    window.__sessionExpiree = false;
+    err.style.display = 'none';
+    document.getElementById('pwd').value = '';
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     initApp();
   } else {
-    document.getElementById('login-err').style.display = 'block';
+    err.textContent = data.error || 'Mot de passe incorrect.';
+    err.style.display = 'block';
   }
 }
-// Session conservée 30 jours dans localStorage : sessionStorage était vidé
-// dès que Safari déchargeait l'onglet en arrière-plan, d'où les reconnexions
-// permanentes sur iPhone.
 
-// Session conservée 30 jours : sessionStorage était vidé dès que Safari
-// déchargeait l'onglet, d'où les reconnexions permanentes sur iPhone.
-const ADMIN_SESSION_MS = 30 * 24 * 60 * 60 * 1000;
-
-function setAdminSession() {
+function setAdminSession(token, exp) {
   try {
-    localStorage.setItem('admin_session', String(Date.now() + ADMIN_SESSION_MS));
+    localStorage.setItem('admin_token', token);
+    localStorage.setItem('admin_token_exp', String(exp));
   } catch (e) {
-    sessionStorage.setItem('admin', '1');
+    sessionStorage.setItem('admin_token', token);
   }
 }
 
 function adminSessionValide() {
-  try {
-    const exp = Number(localStorage.getItem('admin_session'));
-    if (exp && Date.now() < exp) return true;
-    if (exp) localStorage.removeItem('admin_session');
-  } catch (e) {}
-  return sessionStorage.getItem('admin') === '1';
+  return !!adminToken();
 }
 
 function logout() {
@@ -799,6 +818,7 @@ function logout() {
     localStorage.removeItem('admin_token_exp');
   } catch (e) {}
   sessionStorage.removeItem('admin');
+  sessionStorage.removeItem('admin_token');
   location.reload();
 }
 
@@ -808,12 +828,6 @@ async function changePassword() {
   const confirm = document.getElementById('pw-confirm').value;
   const msg = document.getElementById('pw-msg');
 
-  const stored = await getStoredAdminPwd();
-  if (current !== stored) {
-    msg.className = 'msg msg-err';
-    msg.textContent = 'Mot de passe actuel incorrect.';
-    return;
-  }
   if (!next || next.length < 6) {
     msg.className = 'msg msg-err';
     msg.textContent = 'Le nouveau mot de passe doit contenir au moins 6 caractères.';
@@ -825,10 +839,17 @@ async function changePassword() {
     return;
   }
 
-  await dbCall('settings', 'upsert', {
-    payload: { key: 'admin_password', value: next },
-    onConflict: 'key'
+  const res = await fetch('/.netlify/functions/auth', {
+    method: 'POST',
+    headers: adminHeaders(),
+    body: JSON.stringify({ action: 'change', current, next })
   });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    msg.className = 'msg msg-err';
+    msg.textContent = out.error || 'Erreur, mot de passe non changé.';
+    return;
+  }
 
   document.getElementById('pw-current').value = '';
   document.getElementById('pw-new').value = '';
@@ -1774,7 +1795,7 @@ async function saveNewRdv() {
     try {
       const res = await fetch('/.netlify/functions/send-confirmation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders(),
         body: JSON.stringify({ reservationId: newReservationId })
       });
       const data = await res.json().catch(() => ({}));
@@ -2150,7 +2171,7 @@ async function finalizeCancel(remboursed) {
       try {
         const res = await fetch('/.netlify/functions/refund', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: adminHeaders(),
           body: JSON.stringify({ reservationId: currentRdv.id })
         });
         const data = await res.json();
