@@ -1,9 +1,13 @@
 const Stripe = require('stripe');
 const { getDb } = require('./lib/turso');
+const { isAdmin } = require('./lib/auth');
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
+  }
+  if (!isAdmin(event)) {
+    return { statusCode: 401, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Session expirée, reconnectez-vous.' }) };
   }
 
   try {
