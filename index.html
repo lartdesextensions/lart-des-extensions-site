@@ -336,6 +336,22 @@ body{
   .footer-social{justify-content:center;}
 }
 </style>
+<style>
+.nav-links .dd details{position:relative;}
+.nav-links .dd summary{white-space:nowrap;padding-top:4px;list-style:none;cursor:pointer;font-size:12px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:#1F1F1F;}
+.nav-links .dd summary::-webkit-details-marker{display:none;}
+.nav-links .dd summary::after{content:" \25BE";font-size:10px;}
+.nav-links .dd summary:hover,.nav-links .dd.actif summary{color:#B59F88;}
+.dd-menu{position:absolute;top:calc(100% + 16px);left:50%;transform:translateX(-50%);background:#FAF8F5;border:1px solid #DDD0C0;box-shadow:0 10px 30px rgba(0,0,0,0.08);min-width:250px;padding:8px 0;z-index:1100;}
+.dd-menu a{display:block;padding:13px 22px;font-size:11px !important;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;color:#1F1F1F;white-space:nowrap;}
+.dd-menu a:hover{background:#F0EBE3;color:#B59F88;}
+@media(max-width:768px){
+  .nav .nav-links{display:flex !important;gap:0;}
+  .nav .nav-links li:not(.dd){display:none;}
+  .nav-links .dd details{position:static;}
+  .dd-menu{position:fixed;top:96px;left:16px;right:16px;transform:none;min-width:0;}
+}
+</style>
 </head>
 <body>
 
@@ -346,8 +362,7 @@ body{
   </a>
   <ul class="nav-links">
     <li><a href="prestations.html">Prestations</a></li>
-    <li><a href="infos.html">Infos</a></li>
-    <li><a href="blond-balayage-ombre-hair.html">Blond</a></li>
+    <li class="dd"><details><summary>Infos</summary><div class="dd-menu"><a href="infos.html">Extensions de cheveux</a><a href="blond-balayage-ombre-hair.html">Blond, balayage &amp; ombré hair</a><a href="lissage-soins-cheveux.html">Lissage &amp; soins</a></div></details></li>
     <li><a href="#avis">Avis clientes</a></li>
     <li><a href="#faq">FAQ</a></li>
   </ul>
@@ -498,7 +513,7 @@ body{
   </div>
   <div class="footer-links">
     <a href="infos.html">Infos extensions</a>
-    <a href="blond-balayage-ombre-hair.html">Blond &amp; balayage</a>
+    <a href="blond-balayage-ombre-hair.html">Blond &amp; balayage</a><a href="lissage-soins-cheveux.html">Lissage &amp; soins</a>
     <a href="mentions-legales-cgv-rgpd.html">CGV</a>
     <a href="mentions-legales-cgv-rgpd.html">Mentions légales</a>
     <a href="mentions-legales-cgv-rgpd.html">Confidentialité</a>
@@ -541,5 +556,6 @@ function toggleFaq(btn) {
   }
 }
 </script>
+<script>document.addEventListener("click",function(e){document.querySelectorAll(".dd details[open]").forEach(function(d){if(!d.contains(e.target))d.removeAttribute("open")})});</script>
 </body>
 </html>
