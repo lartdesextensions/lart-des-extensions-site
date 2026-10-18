@@ -102,7 +102,7 @@ h2{font-family:'Cormorant Garamond',serif;font-size:clamp(2rem,3vw,2.6rem);font-
 .type:last-child{margin-bottom:0;}
 .type.rev{grid-template-columns:1.3fr 1fr;}
 .type.rev .type-img{order:2;}
-.type-img img{width:100%;aspect-ratio:4/5;object-fit:cover;}
+.type-img img{width:100%;height:auto;display:block;}
 .type h3{font-family:'Cormorant Garamond',serif;font-size:clamp(1.7rem,2.5vw,2.2rem);font-weight:300;line-height:1.2;margin-bottom:16px;}
 .type h3 em{font-style:italic;color:var(--taupe);}
 .type p{font-size:14px;line-height:1.9;color:var(--taupe-dark);margin-bottom:14px;}
@@ -138,8 +138,8 @@ h2{font-family:'Cormorant Garamond',serif;font-size:clamp(2rem,3vw,2.6rem);font-
 <style>
 .hero-blond{margin-top:110px;display:grid;grid-template-columns:1fr 1fr;min-height:560px;border-bottom:1px solid var(--beige-mid);}
 .hero-blond .hero-left{padding:80px 60px;display:flex;flex-direction:column;justify-content:center;}
-.hero-blond .hero-right{background:var(--beige);overflow:hidden;}
-.hero-blond .hero-right img{width:100%;height:100%;object-fit:cover;}
+.hero-blond .hero-right{background:var(--beige);display:flex;align-items:center;justify-content:center;}
+.hero-blond .hero-right img{width:100%;height:auto;display:block;}
 .tarifs{width:100%;border-collapse:collapse;background:var(--white);font-size:13px;margin:6px 0 18px;}
 .tarifs td{border-bottom:1px solid var(--beige-mid);padding:10px 4px;}
 .tarifs td:last-child{text-align:right;font-weight:500;white-space:nowrap;}
@@ -174,6 +174,7 @@ h2{font-family:'Cormorant Garamond',serif;font-size:clamp(2rem,3vw,2.6rem);font-
     <nav class="sommaire" style="justify-content:flex-start">
       <a href="#signature">Balayage Signature</a>
       <a href="#ombre">Ombré hair</a>
+      <a href="#dore">Blond beige doré</a>
       <a href="#blanc">Blond blanc froid</a>
       <a href="#entretien">Entretenir son blond</a>
       <a href="#questions">Questions</a>
@@ -187,7 +188,7 @@ h2{font-family:'Cormorant Garamond',serif;font-size:clamp(2rem,3vw,2.6rem);font-
   <h2>Éclaircir, <em>sans démarcation</em></h2>
 
   <article class="type" id="signature">
-    <div class="type-img"><img style="aspect-ratio:auto;object-fit:contain" src="blond-balayage-signature.jpg" width="879" height="1400" loading="lazy" alt="Balayage Signature : repousse non visible après 3 mois, comparé à un balayage classique"></div>
+    <div class="type-img"><img src="blond-balayage-signature.jpg" width="879" height="1400" loading="lazy" alt="Balayage Signature : repousse non visible après 3 mois, comparé à un balayage classique"></div>
     <div>
       <span class="badge">Ma technique signature</span>
       <h3>Balayage <em>Signature</em></h3>
@@ -213,7 +214,7 @@ h2{font-family:'Cormorant Garamond',serif;font-size:clamp(2rem,3vw,2.6rem);font-
   <article class="type rev" id="ombre">
     <div class="type-img"><img src="blond-ombre-hair.jpg" width="800" height="934" loading="lazy" alt="Ombré hair blond lumineux ondulé réalisé à Orsay (91)"></div>
     <div>
-      <h3>Ombré <em>hair</em></h3>
+      <h3>Ombré hair <em>blond lumineux</em></h3>
       <p>L'<strong>ombré hair</strong> crée un dégradé naturel : des racines plus profondes vers des longueurs de plus en plus lumineuses. Un effet soleil, doux ou intense selon vos envies, qui sublime les cheveux longs comme mi-longs.</p>
       <ul>
         <li>Un dégradé fondu, sans ligne de démarcation</li>
@@ -231,7 +232,21 @@ h2{font-family:'Cormorant Garamond',serif;font-size:clamp(2rem,3vw,2.6rem);font-
     </div>
   </article>
 
-  <article class="type" id="blanc">
+  <article class="type" id="dore">
+    <div class="type-img"><img src="blond-ombre-hair-dore.jpg" width="800" height="847" loading="lazy" alt="Ombré hair blond beige doré, nuance chaude, salon à Orsay (91)"></div>
+    <div>
+      <h3>Ombré hair blond <em>beige doré</em></h3>
+      <p>Envie d'un blond <strong>plus chaud</strong> ? L'ombré hair beige doré apporte de la douceur et de la lumière, avec des reflets chauds qui illuminent le teint. Un résultat naturel, comme un blond « retour de vacances ».</p>
+      <ul>
+        <li>Des racines naturelles fondues dans des longueurs beige doré</li>
+        <li>Une nuance chaude et lumineuse, idéale pour réchauffer le teint</li>
+        <li>Une patine sur-mesure pour obtenir le doré parfait</li>
+      </ul>
+      <p class="inclus">Même tarif que l'ombré hair — patine, soin &amp; brushing inclus</p>
+    </div>
+  </article>
+
+  <article class="type rev" id="blanc">
     <div class="type-img"><img src="blond-blanc-froid.jpg" width="800" height="884" loading="lazy" alt="Blond blanc froid polaire sur cheveux longs, coloriste à Orsay (91)"></div>
     <div>
       <h3>Blond blanc <em>« froid »</em></h3>
