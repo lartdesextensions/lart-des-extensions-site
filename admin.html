@@ -1117,9 +1117,21 @@ function rowAt(i) { return __rows[i]; }
 
 // Montant réellement encaissé en ligne : montant_paye si renseigné (paiement intégral
 // ou acompte), sinon l'acompte — pour les RDV créés à la main et l'historique.
+function rdvDejaPaye(r) {
+  return !!(r && (r.acompte_paye || Number(r.montant_paye) > 0));
+}
+
+function verrouillerAcompte(locked) {
+  const a = document.getElementById('nr-acompte');
+  const c = document.getElementById('nr-acompte-paye');
+  a.disabled = locked; c.disabled = locked;
+  a.title = locked ? "Acompte déjà payé par la cliente : il ne change pas si la prestation est modifiée" : '';
+}
+
 function encaisseEnLigne(r) {
   const paye = Number(r.montant_paye) || 0;
-  return paye > 0 ? paye : (Number(r.acompte) || 0);
+  if (paye > 0) return paye;
+  return r.acompte_paye ? (Number(r.acompte) || 0) : 0;
 }
 
 async function renderDashboardStats() {
@@ -1131,7 +1143,7 @@ async function renderDashboardStats() {
     : range.sub;
 
   const inRange = dashAllRdvs.filter(r => r.date >= range.start && r.date <= range.end);
-  const ca = inRange.reduce((s, r) => s + (r.prix || 0), 0);
+  const ca = inRange.reduce((s, r) => s + (Number(r.prix) || 0), 0);
   const acompte = inRange.reduce((s, r) => s + encaisseEnLigne(r), 0);
   const pending = inRange.filter(r => r.statut === 'en_attente').length;
 
@@ -1147,7 +1159,7 @@ async function renderDashboardStats() {
     const key = r.prestation_nom || 'Autre';
     if (!byPrest[key]) byPrest[key] = { nb: 0, ca: 0 };
     byPrest[key].nb++;
-    byPrest[key].ca += r.prix || 0;
+    byPrest[key].ca += Number(r.prix) || 0;
   });
   const top = Object.entries(byPrest).sort((a, b) => b[1].ca - a[1].ca).slice(0, 8);
   const tbody = document.getElementById('dash-top-prest');
@@ -1419,6 +1431,7 @@ async function openNewRdvModal() {
   document.getElementById('nr-tel').value = '';
   document.getElementById('nr-acompte').value = '';
   document.getElementById('nr-acompte-paye').checked = false;
+  verrouillerAcompte(false);
   document.getElementById('nr-remise-val').value = '';
   updateRemise();
   document.getElementById('nr-email').value = '';
@@ -1472,8 +1485,10 @@ async function openEditRdvModal() {
   document.getElementById('nr-prenom').value = currentRdv.prenom || '';
   document.getElementById('nr-nom').value = currentRdv.nom || '';
   document.getElementById('nr-tel').value = currentRdv.telephone || '';
-  document.getElementById('nr-acompte').value = currentRdv.acompte || '';
-  document.getElementById('nr-acompte-paye').checked = !!currentRdv.acompte_paye;
+  document.getElementById('nr-acompte').value = rdvDejaPaye(currentRdv)
+    ? encaisseEnLigne(currentRdv) : (currentRdv.acompte || '');
+  document.getElementById('nr-acompte-paye').checked = rdvDejaPaye(currentRdv);
+  verrouillerAcompte(rdvDejaPaye(currentRdv));
   document.getElementById('nr-email').value = currentRdv.email || '';
   document.getElementById('nr-add-prestation').value = '';
   document.getElementById('nr-supp-nom').value = '';
@@ -1514,7 +1529,9 @@ function onNrPrestationChange() {
     document.getElementById('nr-remise-val').value = '';
     updateRemise();
     document.getElementById('nr-duree').value = p.duree_min;
-    document.getElementById('nr-acompte').value = Math.round(p.prix * 0.35);
+    if (!(editingRdvId && rdvDejaPaye(currentRdv))) {
+      document.getElementById('nr-acompte').value = Math.round(p.prix * 0.35);
+    }
   } else {
     customRow.style.display = 'none';
   }
@@ -1698,11 +1715,15 @@ async function saveNewRdv() {
   let newReservationId = null;
   try {
     if (editingRdvId) {
+      const dejaPaye = rdvDejaPaye(currentRdv);
       const payload = {
         prenom, nom, telephone: tel, email,
         prestation_nom: primary.nom,
-        date, heure, duree_min: primary.duree_min, prix: prixNet, acompte: acompteTotal,
-        acompte_paye: acomptePaye, montant_paye: acomptePaye ? acompteTotal : 0
+        date, heure, duree_min: primary.duree_min, prix: prixNet,
+        // Acompte déjà réglé par la cliente : on le garde tel quel
+        acompte: dejaPaye ? (Number(currentRdv.acompte) || 0) : acompteTotal,
+        acompte_paye: dejaPaye ? 1 : acomptePaye,
+        montant_paye: dejaPaye ? encaisseEnLigne(currentRdv) : (acomptePaye ? acompteTotal : 0)
       };
       await dbCall('reservations', 'update', {
         payload,
@@ -1889,7 +1910,7 @@ async function loadAgenda() {
   agendaOpenEnd = dispo?.heure_fin || weeklyHoursMap[`hours_${dow}_end`] || '17:00';
 
   const summary = document.getElementById('agenda-summary');
-  const totalPrix = agendaData.reduce((s, r) => s + (r.prix || 0), 0);
+  const totalPrix = agendaData.reduce((s, r) => s + (Number(r.prix) || 0), 0);
   const totalAcompte = agendaData.reduce((s, r) => s + encaisseEnLigne(r), 0);
   const totalProduits = (ventesJour || []).reduce((s, v) => s + (Number(v.prix) || 0) * (Number(v.quantite) || 1), 0);
 
