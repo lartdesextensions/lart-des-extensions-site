@@ -270,7 +270,8 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
             </span>
           </button>
 
-          <button type="button" class="pay-method" id="pm-paypal" onclick="choosePaypal()">
+          <!-- PayPal retiré du paiement en ligne (trop de frais) -->
+          <button type="button" class="pay-method" id="pm-paypal" style="display:none" onclick="choosePaypal()">
             <span class="pm-ico pm-ico-pp">PayPal</span>
             <span class="pm-txt">
               <span class="pm-t">PayPal</span>
