@@ -650,7 +650,7 @@ tr:hover td{background:var(--cream);}
     </label>
     <div id="nr-msg" style="font-size:.78rem;margin-top:8px;"></div>
     <div class="modal-actions">
-      <button class="btn" onclick="saveNewRdv()">Enregistrer</button>
+      <button class="btn" id="nr-save-btn" onclick="saveNewRdv()">Enregistrer</button>
       <button class="btn btn-outline" onclick="closeNewRdvModal()">Annuler</button>
     </div>
   </div>
@@ -1697,7 +1697,24 @@ function updateNrTotalSummary() {
   summary.innerHTML = `<strong>${all.length} prestations</strong> · Total : ${totalPrix} € · ${formatDur(totalDuree)} — chaque prestation apparaîtra séparément dans le planning, à la suite.`;
 }
 
+// Empêche les doublons : tant que l'enregistrement n'est pas fini,
+// un 2e clic sur « Enregistrer » ne fait rien.
+let nrSaving = false;
 async function saveNewRdv() {
+  if (nrSaving) return;
+  nrSaving = true;
+  const btn = document.getElementById('nr-save-btn');
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; btn.style.opacity = '.6'; }
+  try {
+    await saveNewRdvInner();
+  } finally {
+    nrSaving = false;
+    if (btn) { btn.disabled = false; btn.textContent = label; btn.style.opacity = ''; }
+  }
+}
+
+async function saveNewRdvInner() {
   const date = document.getElementById('nr-date').value;
   const heure = document.getElementById('nr-heure').value;
   const prenom = document.getElementById('nr-prenom').value.trim();
