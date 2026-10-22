@@ -1321,13 +1321,23 @@ function selectNrClient(c) {
   document.getElementById('nr-client-suggestions').style.display = 'none';
 }
 
+// Formations : visibles uniquement dans l'admin (jamais réservables en ligne).
+// Formule complète sur 2 jours : le jour 2 est à 0 € pour ne pas compter 2 fois le CA.
+const FORMATIONS_PRIVEES = [
+  { nom: 'Formation Complète – Jour 1', prix: 850, duree_min: 420, categorie: 'Formations', actif: true },
+  { nom: 'Formation Complète – Jour 2', prix: 0, duree_min: 420, categorie: 'Formations', actif: true },
+  { nom: 'Formation Bandes Adhésives', prix: 450, duree_min: 420, categorie: 'Formations', actif: true },
+  { nom: 'Formation Bandes Adhésives & Weft', prix: 600, duree_min: 420, categorie: 'Formations', actif: true }
+];
+
 async function ensureNrPrestationsLoaded() {
   if (nrPrestations.length > 0) return;
   const { data } = await dbCall('prestations', 'select', {
     filters: [{ col: 'actif', op: 'eq', value: true }],
     order: [{ col: 'ordre' }]
   });
-  nrPrestations = data || [];
+  nrPrestations = (data || []).concat(FORMATIONS_PRIVEES.filter(f =>
+    !(data || []).some(p => (p.nom || '').trim().toLowerCase() === f.nom.toLowerCase())));
   document.getElementById('nr-prestation').innerHTML =
     '<option value="">— Choisir une prestation —</option>' +
     buildGroupedOptions(nrPrestations) +
