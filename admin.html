@@ -1128,6 +1128,11 @@ function verrouillerAcompte(locked) {
   a.title = locked ? "Acompte déjà payé par la cliente : il ne change pas si la prestation est modifiée" : '';
 }
 
+// Une cliente avec plusieurs prestations le même jour (même groupe_id) = 1 seul RDV
+function nbRdvClientes(list) {
+  return new Set(list.map(r => r.groupe_id || ('id' + r.id))).size;
+}
+
 function encaisseEnLigne(r) {
   const paye = Number(r.montant_paye) || 0;
   if (paye > 0) return paye;
@@ -1147,11 +1152,12 @@ async function renderDashboardStats() {
   const acompte = inRange.reduce((s, r) => s + encaisseEnLigne(r), 0);
   const pending = inRange.filter(r => r.statut === 'en_attente').length;
 
-  document.getElementById('dash-rdv').textContent = inRange.length;
+  const nbRdv = nbRdvClientes(inRange);
+  document.getElementById('dash-rdv').textContent = nbRdv;
   document.getElementById('dash-ca').textContent = ca.toLocaleString('fr-FR') + ' €';
   document.getElementById('dash-acompte').textContent = acompte.toLocaleString('fr-FR') + ' €';
   document.getElementById('dash-reste').textContent = (ca - acompte).toLocaleString('fr-FR') + ' €';
-  document.getElementById('dash-panier').textContent = inRange.length ? Math.round(ca / inRange.length).toLocaleString('fr-FR') + ' €' : '0 €';
+  document.getElementById('dash-panier').textContent = nbRdv ? Math.round(ca / nbRdv).toLocaleString('fr-FR') + ' €' : '0 €';
   document.getElementById('dash-pending').textContent = pending;
 
   const byPrest = {};
@@ -1733,6 +1739,12 @@ async function saveNewRdvInner() {
   const primary = primaryServiceFromForm();
   const services = [primary, ...nrExtraServices].filter(s => s.nom);
 
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    msg.style.color = 'var(--error)';
+    msg.textContent = 'L\'adresse email semble incorrecte (ex. : prenom.nom@gmail.com). Corrigez-la ou laissez le champ vide.';
+    return;
+  }
+
   if (!date || !heure || services.length === 0 || !prenom || !nom) {
     msg.style.color = 'var(--error)';
     msg.textContent = 'Merci de remplir au minimum la date, l\'heure, la prestation, le prénom et le nom.';
@@ -1945,7 +1957,7 @@ async function loadAgenda() {
     summary.innerHTML = `<div class="stat-card" style="flex:1;min-width:200px;background:#FFEBEE;border-color:#EF9A9A;"><div class="stat-label" style="color:var(--error);font-size:.8rem;">🚫 Salon fermé ce jour</div></div>`;
   } else {
     summary.innerHTML = `
-      <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${agendaData.length}</div><div class="stat-label">Rendez-vous</div></div>
+      <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${nbRdvClientes(agendaData)}</div><div class="stat-label">Rendez-vous</div></div>
       <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${totalPrix} €</div><div class="stat-label">Total prestations</div></div>
       <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${totalProduits} €</div><div class="stat-label">Total produits</div></div>
       <div class="stat-card" style="flex:1;min-width:120px;"><div class="stat-num">${totalAcompte} €</div><div class="stat-label">Total encaissé</div></div>`;
