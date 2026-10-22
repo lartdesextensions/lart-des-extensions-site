@@ -2270,6 +2270,13 @@ async function finalizeCancel(remboursed) {
     payload: { statut: 'annule', acompte_rembourse: remboursed && autoRefundOutcome !== 'failed' },
     filters: [{ col: 'id', op: 'eq', value: currentRdv.id }]
   });
+  // Les autres prestations du même RDV (même groupe_id) sont annulées aussi
+  if (currentRdv.groupe_id) {
+    await dbCall('reservations', 'update', {
+      payload: { statut: 'annule' },
+      filters: [{ col: 'groupe_id', op: 'eq', value: currentRdv.groupe_id }, { col: 'statut', op: 'neq', value: 'annule' }]
+    }).catch(err => console.error('Annulation du groupe :', err));
+  }
   closeModal();
   refreshAllViews();
 
