@@ -65,6 +65,29 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
 .content-sub{font-size:.78rem;color:var(--taupe-dark);margin-bottom:24px;}
 
 .section{display:none;}
+.bud-big{font-family:'Cormorant Garamond',serif;font-size:2.6rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;}
+.bud-pos{color:#3E7B55;} .bud-neg{color:var(--error);} .bud-neutre{color:var(--brown);}
+.bud-bar{height:8px;background:var(--beige);border-radius:99px;overflow:hidden;margin-top:10px;}
+.bud-bar span{display:block;height:100%;border-radius:99px;}
+.bud-year{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:22px;}
+@media(max-width:600px){.bud-year{grid-template-columns:repeat(4,1fr);}}
+.bud-chip{border:1px solid var(--beige-mid);background:var(--white);border-radius:8px;padding:7px 4px;text-align:center;cursor:pointer;font-family:'Poppins',sans-serif;font-variant-numeric:tabular-nums;}
+.bud-chip b{display:block;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--taupe-dark);font-weight:500;}
+.bud-chip span{font-size:.76rem;font-weight:600;}
+.bud-chip.on{border-color:var(--dark);box-shadow:0 0 0 1px var(--dark);}
+.bud-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--beige);font-size:.84rem;font-variant-numeric:tabular-nums;}
+.bud-row small{display:block;color:var(--taupe-dark);font-size:.7rem;}
+.bud-row input{font-family:'Poppins',sans-serif;font-size:.84rem;padding:6px 8px;border:1px solid var(--beige-mid);border-radius:6px;font-variant-numeric:tabular-nums;}
+.bud-row input.bm{width:92px;text-align:right;flex:none;background:#FFFBEA;}
+.bud-row input.bn{flex:1;min-width:0;border-color:transparent;background:transparent;}
+.bud-row input.bn:hover,.bud-row input.bn:focus{border-color:var(--beige-mid);background:#FFFBEA;}
+.bud-row .bp{display:flex;align-items:center;gap:3px;font-size:.72rem;color:var(--taupe-dark);flex:none;}
+.bud-row .bp input{width:50px;text-align:right;background:#FFFBEA;}
+.bud-del{background:none;border:0;color:var(--taupe-dark);font-size:1rem;cursor:pointer;padding:2px 6px;}
+.bud-sec{padding:10px 14px 2px;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);}
+details.bud-det{margin-bottom:10px;}
+details.bud-det summary{padding:13px 14px;cursor:pointer;font-weight:600;display:flex;justify-content:space-between;background:var(--beige);font-variant-numeric:tabular-nums;}
+
 .section.active{display:block;}
 
 /* CARDS */
@@ -248,6 +271,7 @@ tr:hover td{background:var(--cream);}
     <div class="nav-item active" onclick="showSection('dashboard')">📊 Vue d'ensemble</div>
     <div class="nav-item" onclick="showSection('agenda')">🗓️ Agenda du jour</div>
     <div class="nav-item" onclick="showSection('reservations')">📅 Réservations</div>
+    <div class="nav-item" onclick="showSection('budget')">💶 Budget du mois</div>
     <div class="nav-section">Gestion</div>
     <div class="nav-item" onclick="showSection('disponibilites')">🗓 Disponibilités</div>
     <div class="nav-item" onclick="showSection('prestations')">✂️ Prestations</div>
@@ -258,6 +282,35 @@ tr:hover td{background:var(--cream);}
   </div>
 
   <div class="content">
+
+    <!-- BUDGET DU MOIS -->
+    <div class="section" id="sec-budget">
+      <div class="content-title">Budget du mois</div>
+      <div class="content-sub">Chiffre d'affaires et main-d'œuvre se remplissent avec les rendez-vous. Le reste se modifie ici et s'enregistre tout seul.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;">
+        <button class="cal-nav-btn" style="width:auto;padding:0 12px;" onclick="budgetShift(-1)">‹ Précédent</button>
+        <span style="font-family:'Cormorant Garamond',serif;font-size:1.25rem;" id="bud-label"></span>
+        <button class="cal-nav-btn" style="width:auto;padding:0 12px;" onclick="budgetShift(1)">Suivant ›</button>
+      </div>
+      <div class="bud-year" id="bud-year"></div>
+      <div class="stat-card" style="text-align:center;margin-bottom:14px;">
+        <div class="stat-label" style="margin-bottom:8px;">Ce qu'il me reste</div>
+        <div class="bud-big" id="bud-reste">—</div>
+        <div id="bud-objectif" style="font-size:.8rem;color:var(--taupe-dark);margin-top:10px;"></div>
+        <div class="bud-bar"><span id="bud-bar"></span></div>
+        <div id="bud-save" style="font-size:.7rem;color:var(--taupe-dark);margin-top:10px;"></div>
+      </div>
+      <div class="table-wrap" style="margin-bottom:14px;">
+        <div class="bud-sec" style="padding-top:12px;">Ce qui rentre</div>
+        <div id="bud-entrees"></div>
+      </div>
+      <div class="table-wrap" style="margin-bottom:14px;">
+        <div class="bud-sec" style="padding-top:12px;">Ce qui sort</div>
+        <div id="bud-sorties"></div>
+      </div>
+      <div id="bud-details"></div>
+      <div style="text-align:center;margin-top:8px;"><button class="btn btn-outline" id="bud-reset" onclick="budgetReset()" style="font-size:.75rem;">Reprendre les charges du mois précédent</button></div>
+    </div>
 
     <!-- DASHBOARD -->
     <div class="section active" id="sec-dashboard">
@@ -285,6 +338,8 @@ tr:hover td{background:var(--cream);}
         <span style="font-family:'Cormorant Garamond',serif;font-size:1.1rem;" id="dash-nav-label"></span>
         <button class="cal-nav-btn" onclick="dashShift(1)">Suivant ›</button>
       </div>
+
+      <div id="dash-objectif" class="stat-card" style="display:none;margin-bottom:14px;"></div>
 
       <div class="stats">
         <div class="stat-card"><div class="stat-num" id="dash-rdv">—</div><div class="stat-label">Rendez-vous</div></div>
@@ -890,6 +945,8 @@ function showSection(id) {
   event.target.classList.add('active');
   if (id === 'agenda') loadAgenda();
   if (id === 'reservations') loadReservations();
+  if (id === 'budget') renderBudget();
+  if (id === 'dashboard' && dashAllRdvs) renderDashboardStats();
   if (id === 'prestations') loadPrestations();
   if (id === 'produits') { loadProduits(); loadVentesRecentes(); }
   if (id === 'clients') loadClients();
@@ -1048,6 +1105,7 @@ async function initApp() {
   adminYear = now.getFullYear();
   adminMonth = now.getMonth();
   await chargerCoutsPerso();
+  await chargerBudget();
   await loadDashboard();
   renderAdminCal();
   rafraichirCloche(true);
@@ -1164,6 +1222,7 @@ async function renderDashboardStats() {
   document.getElementById('dash-reste').textContent = (ca - acompte).toLocaleString('fr-FR') + ' €';
   document.getElementById('dash-panier').textContent = nbRdv ? Math.round(ca / nbRdv).toLocaleString('fr-FR') + ' €' : '0 €';
   document.getElementById('dash-pending').textContent = pending;
+  renderObjectifDashboard(range);
   const materiel = inRange.reduce((s, r) => s + coutMateriel(r.prestation_nom), 0);
   document.getElementById('dash-materiel').textContent = fmtEur(materiel);
   document.getElementById('dash-mo').textContent = fmtEur(ca - materiel);
@@ -2902,6 +2961,230 @@ async function enregistrerCoutPerso(nom, valeur, ancienNom) {
   }
   await dbCall('couts_materiel', 'upsert', { payload: { nom: k, cout: v }, onConflict: 'nom' });
   coutsPerso[k] = v;
+}
+
+// ── BUDGET DU MOIS ──
+// Une ligne par mois (table budget_mois, admin uniquement). Chiffre d'affaires et
+// main-d'œuvre viennent des rendez-vous du mois ; salaire, autres rentrées, taux
+// URSSAF et charges sont saisis ici. Un mois jamais modifié reprend les charges
+// du dernier mois enregistré avant lui.
+const BUDGET_SECTIONS_DEFAUT = [{"id": "pro", "titre": "Charges pro", "note": "Extensions et produits ne sont pas ici : ils sont déjà déduits de la main-d'œuvre.", "groupes": [{"nom": "Fixes", "items": [{"n": "Loyer professionnel", "m": 710}, {"n": "Generali (RC Pro + local)", "m": 44.57}, {"n": "Bouygues Telecom", "m": 23.99}, {"n": "Bleu Libellule, abonnement", "m": 8.4}, {"n": "Netlify (site)", "m": 8}, {"n": "Top-webgroup (à identifier)", "m": 7.99}]}, {"nom": "Variables", "items": [{"n": "Livraison + frais Ria", "m": 90}, {"n": "Amazon (pro)", "m": 80}, {"n": "Carburant", "m": 140}]}]}, {"id": "com", "titre": "Ma part des charges communes", "note": "Montants totaux du foyer, ta part est calculée.", "groupes": [{"nom": "Compte joint LCL", "part": true, "items": [{"n": "Loyer maison", "m": 1650, "p": 50}, {"n": "Engie", "m": 340, "p": 50}, {"n": "Crédit", "m": 240, "p": 35}, {"n": "Eau", "m": 56, "p": 50}, {"n": "Verisure", "m": 52.24, "p": 50}, {"n": "Internet Bouygues", "m": 39.99, "p": 50}, {"n": "Location de films", "m": 7, "p": 50}, {"n": "Assurance habitation", "m": 32.01, "p": 50}, {"n": "Frais LCL", "m": 2, "p": 50}, {"n": "Courses", "m": 400, "p": 50}]}]}, {"id": "per", "titre": "Charges perso", "groupes": [{"nom": "Fixes", "items": [{"n": "Crédit BNP", "m": 100}, {"n": "Assurance auto", "m": 96.92}, {"n": "Studi", "m": 61}, {"n": "Cofidis (fin ≈ mai 2027)", "m": 56.68}, {"n": "Mutuelle", "m": 46.65}, {"n": "Assurance vie de ma fille", "m": 30}, {"n": "ChatGPT", "m": 22.99}, {"n": "Meta Verified", "m": 16.99}, {"n": "Sosh", "m": 10.99}, {"n": "Disney+", "m": 6.99}, {"n": "Claude", "m": 2.99}, {"n": "Frais BoursoBank", "m": 2}]}, {"nom": "Variables", "items": [{"n": "Amazon, Vinted, vêtements", "m": 210}, {"n": "Achats PayPal divers", "m": 140}, {"n": "Repas / Uber Eats", "m": 120}, {"n": "Courses Picnic (perso)", "m": 90}]}]}];
+const BUDGET_SAL_INIT = { '2026-10': 1125 };
+const MOIS_COURTS = ['Janv','Févr','Mars','Avr','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'];
+let budgetRows = null;
+let budgetMois = fmtDate(new Date()).slice(0, 7);
+let budgetCourant = null;
+let budgetTimer = null;
+let budgetChaine = Promise.resolve();
+const budgetOuverts = new Set();
+
+const bClone = o => JSON.parse(JSON.stringify(o));
+const bNum = v => parseFloat(String(v).replace(',', '.')) || 0;
+
+async function chargerBudget() {
+  try {
+    const { data } = await dbCall('budget_mois', 'select');
+    budgetRows = {};
+    (data || []).forEach(r => { try { budgetRows[r.mois] = JSON.parse(r.data); } catch (e) {} });
+  } catch (e) { budgetRows = budgetRows || {}; }
+}
+
+function budgetPour(mois) {
+  if (budgetRows && budgetRows[mois]) return budgetRows[mois];
+  const prev = Object.keys(budgetRows || {}).filter(m => m < mois).sort().pop();
+  const base = prev ? budgetRows[prev] : { taux: 0, sections: BUDGET_SECTIONS_DEFAUT };
+  return { sal: BUDGET_SAL_INIT[mois] || 0, autres: 0, taux: base.taux, sections: bClone(base.sections) };
+}
+
+function calcBudget(mois, d) {
+  const rdvs = (dashAllRdvs || []).filter(r => r.date && r.date.slice(0, 7) === mois);
+  const ca = rdvs.reduce((s, r) => s + (Number(r.prix) || 0), 0);
+  const mo = rdvs.reduce((s, r) => s + mainOeuvre(r), 0);
+  const tot = {};
+  d.sections.forEach(sec => {
+    let t = 0;
+    sec.groupes.forEach(g => g.items.forEach(it => { t += g.part ? bNum(it.m) * bNum(it.p) / 100 : bNum(it.m); }));
+    tot[sec.id] = t;
+  });
+  const urssaf = ca * bNum(d.taux) / 100;
+  const sorties = urssaf + (tot.pro || 0) + (tot.com || 0) + (tot.per || 0);
+  const entreesHorsMo = bNum(d.sal) + bNum(d.autres);
+  const reste = mo + entreesHorsMo - sorties;
+  const objectif = Math.max(sorties - entreesHorsMo, 0);
+  return { ca, mo, tot, urssaf, sorties, reste, objectif, nbRdv: nbRdvClientes(rdvs) };
+}
+
+// Rouge sous l'objectif, neutre si atteint (jusqu'à +2 %), vert au-delà
+function classeObjectif(mo, objectif) {
+  if (mo < objectif) return 'neg';
+  if (mo <= objectif * 1.02) return 'neutre';
+  return 'pos';
+}
+
+function libelleMois(mois) {
+  const [y, m] = mois.split('-').map(Number);
+  return MONTHS[m - 1] + ' ' + y;
+}
+
+function budgetShift(dir) {
+  const [y, m] = budgetMois.split('-').map(Number);
+  const d = new Date(y, m - 1 + dir, 1);
+  budgetMois = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  renderBudget();
+}
+function budgetAller(mois) { budgetMois = mois; renderBudget(); }
+
+async function renderBudget() {
+  if (!budgetRows) await chargerBudget();
+  if (!dashAllRdvs) await loadDashboard();
+  document.querySelectorAll('#bud-details details[open]').forEach(d => budgetOuverts.add(d.dataset.id));
+  budgetCourant = budgetPour(budgetMois);
+  document.getElementById('bud-label').textContent = libelleMois(budgetMois);
+
+  const d = budgetCourant;
+  document.getElementById('bud-entrees').innerHTML = `
+    <div class="bud-row"><span>Chiffre d'affaires<small>Rendez-vous pris ce mois-ci</small></span><span id="bud-ca"></span></div>
+    <div class="bud-row"><span>Main-d'œuvre<small>Chiffre d'affaires moins le matériel</small></span><strong id="bud-mo"></strong></div>
+    <div class="bud-row"><span>Salaire JJAMILES</span><input class="bm" type="number" inputmode="decimal" step="0.01" id="bud-sal" data-bf="sal" value="${d.sal}"></div>
+    <div class="bud-row"><span>Autres rentrées</span><input class="bm" type="number" inputmode="decimal" step="0.01" id="bud-autres" data-bf="autres" value="${d.autres}"></div>`;
+
+  let h = '';
+  d.sections.forEach((sec, si) => {
+    h += `<details class="table-wrap bud-det" data-id="${sec.id}"${budgetOuverts.has(sec.id) ? ' open' : ''}><summary><span>${escHtml(sec.titre)}</span><span id="bud-t-${sec.id}"></span></summary>`;
+    sec.groupes.forEach((g, gi) => {
+      h += `<div class="bud-sec">${escHtml(g.nom)}</div>`;
+      g.items.forEach((it, ii) => {
+        const k = `${si}-${gi}-${ii}`;
+        h += `<div class="bud-row"><input class="bn" id="bud-n-${k}" data-bk="${k}" data-bi="n" value="${escHtml(it.n)}" aria-label="Nom de la charge">`
+          + (g.part ? `<span class="bp"><input type="number" inputmode="decimal" id="bud-p-${k}" data-bk="${k}" data-bi="p" value="${it.p}" aria-label="Ma part en %">%</span>` : '')
+          + `<input class="bm" type="number" inputmode="decimal" step="0.01" id="bud-m-${k}" data-bk="${k}" data-bi="m" value="${it.m}" aria-label="Montant par mois">`
+          + `<button class="bud-del" onclick="budgetSupprimer('${k}')" aria-label="Supprimer">×</button></div>`;
+      });
+      h += `<div style="padding:8px 14px;"><button class="action-btn" onclick="budgetAjouter(${si},${gi})">+ Ajouter une ligne</button></div>`;
+    });
+    if (sec.note) h += `<div style="padding:0 14px 12px;font-size:.72rem;color:var(--taupe-dark);">${escHtml(sec.note)}</div>`;
+    h += '</details>';
+  });
+  document.getElementById('bud-details').innerHTML = h;
+  document.querySelectorAll('#bud-details details').forEach(det => det.addEventListener('toggle', () => {
+    det.open ? budgetOuverts.add(det.dataset.id) : budgetOuverts.delete(det.dataset.id);
+  }));
+  document.getElementById('bud-save').textContent = (budgetRows && budgetRows[budgetMois]) ? '' : 'Mois pas encore modifié : charges reprises du mois précédent';
+  majBudget();
+}
+
+function majBudget() {
+  const d = budgetCourant, c = calcBudget(budgetMois, d);
+  document.getElementById('bud-ca').textContent = fmtEur(c.ca);
+  document.getElementById('bud-mo').textContent = fmtEur(c.mo);
+  ['pro', 'com', 'per'].forEach(id => { const el = document.getElementById('bud-t-' + id); if (el) el.textContent = fmtEur(c.tot[id] || 0); });
+  document.getElementById('bud-sorties').innerHTML = `
+    <div class="bud-row"><span>Taux URSSAF (%)<small>Mets 0 pour ne pas la compter ce mois-ci</small></span><input class="bm" type="number" inputmode="decimal" step="0.1" id="bud-taux" data-bf="taux" value="${d.taux}"></div>
+    <div class="bud-row"><span>URSSAF du mois</span><span>${fmtEur(c.urssaf)}</span></div>
+    <div class="bud-row"><span>Charges pro</span><span>${fmtEur(c.tot.pro || 0)}</span></div>
+    <div class="bud-row"><span>Ma part des charges communes</span><span>${fmtEur(c.tot.com || 0)}</span></div>
+    <div class="bud-row"><span>Charges perso</span><span>${fmtEur(c.tot.per || 0)}</span></div>
+    <div class="bud-row" style="font-weight:600;background:var(--beige);"><span>Total qui sort</span><span>${fmtEur(c.sorties)}</span></div>`;
+  const big = document.getElementById('bud-reste');
+  big.textContent = (c.reste > 0 ? '+' : '') + fmtEur(c.reste);
+  const cl = classeObjectif(c.mo, c.objectif);
+  big.className = 'bud-big bud-' + (c.reste < 0 ? 'neg' : cl);
+  document.getElementById('bud-objectif').innerHTML = `Objectif minimum de main-d'œuvre : <strong>${fmtEur(c.objectif)}</strong> — fait : <strong>${fmtEur(c.mo)}</strong>`
+    + (c.mo < c.objectif ? ` — reste à faire : <strong>${fmtEur(c.objectif - c.mo)}</strong>` : '');
+  const bar = document.getElementById('bud-bar');
+  bar.style.width = (c.objectif > 0 ? Math.min(100, c.mo / c.objectif * 100) : 100) + '%';
+  bar.style.background = cl === 'neg' ? 'var(--error)' : (cl === 'neutre' ? 'var(--taupe)' : '#3E7B55');
+  renderBudgetAnnee();
+}
+
+function renderBudgetAnnee() {
+  const y = budgetMois.slice(0, 4);
+  let h = '';
+  for (let m = 1; m <= 12; m++) {
+    const mois = `${y}-${String(m).padStart(2, '0')}`;
+    const c = calcBudget(mois, mois === budgetMois ? budgetCourant : budgetPour(mois));
+    const vide = c.nbRdv === 0 && !(budgetRows && budgetRows[mois]);
+    const col = vide ? 'var(--taupe-dark)' : (c.reste < 0 ? 'var(--error)' : '#3E7B55');
+    h += `<button class="bud-chip${mois === budgetMois ? ' on' : ''}" onclick="budgetAller('${mois}')"><b>${MOIS_COURTS[m - 1]}</b><span style="color:${col}">${vide ? '—' : (c.reste > 0 ? '+' : '') + Math.round(c.reste).toLocaleString('fr-FR') + ' €'}</span></button>`;
+  }
+  document.getElementById('bud-year').innerHTML = h;
+}
+
+function budgetModifie() {
+  budgetRows = budgetRows || {};
+  budgetRows[budgetMois] = budgetCourant;
+  const mois = budgetMois, data = JSON.stringify(budgetCourant);
+  const st = document.getElementById('bud-save');
+  st.textContent = 'Enregistrement…';
+  clearTimeout(budgetTimer);
+  budgetTimer = setTimeout(() => {
+    budgetChaine = budgetChaine
+      .then(() => dbCall('budget_mois', 'upsert', { payload: { mois, data }, onConflict: 'mois' }))
+      .then(() => { st.textContent = '✓ Enregistré'; })
+      .catch(() => { st.textContent = 'Pas enregistré : vérifie ta connexion et modifie à nouveau'; });
+  }, 700);
+}
+
+function budgetItem(k) { const [si, gi, ii] = k.split('-').map(Number); return budgetCourant.sections[si].groupes[gi].items[ii]; }
+
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset && t.dataset.bk) {
+    const it = budgetItem(t.dataset.bk);
+    it[t.dataset.bi] = t.dataset.bi === 'n' ? t.value : bNum(t.value);
+  } else if (t.dataset && t.dataset.bf) {
+    budgetCourant[t.dataset.bf] = bNum(t.value);
+  } else return;
+  majBudget();
+  budgetModifie();
+});
+
+function budgetSupprimer(k) {
+  const [si, gi, ii] = k.split('-').map(Number);
+  budgetCourant.sections[si].groupes[gi].items.splice(ii, 1);
+  budgetModifie(); renderBudget();
+}
+function budgetAjouter(si, gi) {
+  const g = budgetCourant.sections[si].groupes[gi];
+  g.items.push(g.part ? { n: 'Nouvelle charge', m: 0, p: 50 } : { n: 'Nouvelle charge', m: 0 });
+  budgetOuverts.add(budgetCourant.sections[si].id);
+  budgetModifie(); renderBudget();
+  const el = document.getElementById(`bud-n-${si}-${gi}-${g.items.length - 1}`);
+  if (el) { el.focus(); el.select(); }
+}
+function budgetReset() {
+  const b = document.getElementById('bud-reset');
+  if (b.dataset.confirm !== '1') {
+    b.dataset.confirm = '1'; b.textContent = 'Confirmer : remplacer les charges de ce mois';
+    setTimeout(() => { b.dataset.confirm = ''; b.textContent = 'Reprendre les charges du mois précédent'; }, 4000);
+    return;
+  }
+  b.dataset.confirm = ''; b.textContent = 'Reprendre les charges du mois précédent';
+  const prev = Object.keys(budgetRows || {}).filter(m => m < budgetMois).sort().pop();
+  budgetCourant.sections = bClone(prev ? budgetRows[prev].sections : BUDGET_SECTIONS_DEFAUT);
+  budgetModifie(); renderBudget();
+}
+
+// Carte « Objectif du mois » dans la vue d'ensemble
+function renderObjectifDashboard(range) {
+  const box = document.getElementById('dash-objectif');
+  if (!box || !budgetRows || dashPeriod === 'annee') { if (box) box.style.display = 'none'; return; }
+  const mois = range.start.slice(0, 7);
+  const c = calcBudget(mois, budgetPour(mois));
+  const cl = classeObjectif(c.mo, c.objectif);
+  const coul = cl === 'neg' ? 'var(--error)' : (cl === 'neutre' ? 'var(--brown)' : '#3E7B55');
+  const pct = c.objectif > 0 ? Math.min(100, c.mo / c.objectif * 100) : 100;
+  const msg = cl === 'neg' ? `Reste à faire : ${fmtEur(c.objectif - c.mo)}` : (cl === 'neutre' ? 'Objectif atteint' : `Au-dessus de l'objectif : +${fmtEur(c.mo - c.objectif)}`);
+  box.style.display = 'block';
+  box.style.cursor = 'pointer';
+  box.onclick = () => { budgetMois = mois; document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.textContent.includes('Budget du mois'))); document.querySelectorAll('.section').forEach(s => s.classList.remove('active')); document.getElementById('sec-budget').classList.add('active'); renderBudget(); };
+  box.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;">
+      <div class="stat-label">Objectif minimum de main-d'œuvre — ${libelleMois(mois)}</div>
+      <div style="font-size:.78rem;font-weight:600;color:${coul};">${msg}</div></div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin-top:6px;font-variant-numeric:tabular-nums;">
+      <span class="stat-num" style="color:${coul};">${fmtEur(c.mo)}</span>
+      <span style="font-size:.85rem;color:var(--taupe-dark);">sur ${fmtEur(c.objectif)}</span></div>
+    <div class="bud-bar"><span style="width:${pct}%;background:${coul};"></span></div>`;
 }
 
 // ── PRODUITS (vente en interne, jamais affiché sur le site public) ──
