@@ -11,8 +11,17 @@ const TABLES = {
   clients: ['id','prenom','nom','telephone','email','notes','created_at','updated_at'],
   settings: ['key','value'],
   produits: ['id','nom','prix','actif','ordre'],
-  ventes_produits: ['id','produit_nom','prix','quantite','date','reservation_id','prenom','nom','created_at']
+  ventes_produits: ['id','produit_nom','prix','quantite','date','reservation_id','prenom','nom','created_at'],
+  // Coût matériel personnalisé par prestation (admin uniquement, jamais public)
+  couts_materiel: ['nom','cout']
 };
+
+let coutsTablePrete = false;
+async function ensureCoutsTable(db) {
+  if (coutsTablePrete) return;
+  await db.execute('CREATE TABLE IF NOT EXISTS couts_materiel (nom TEXT PRIMARY KEY, cout REAL NOT NULL)');
+  coutsTablePrete = true;
+}
 
 const OPS = { eq: '=', neq: '!=', gte: '>=', lte: '<=', gt: '>', lt: '<' };
 
@@ -114,6 +123,8 @@ exports.handler = async function (event) {
     const db = getDb();
 
     if (!isAdmin(event)) return await publicRequest(db, body);
+
+    if (table === 'couts_materiel') await ensureCoutsTable(db);
 
     // Le mot de passe et les compteurs de connexion ne passent jamais par ici
     if (table === 'settings' && action !== 'select') {
