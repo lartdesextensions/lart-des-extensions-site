@@ -293,6 +293,8 @@ tr:hover td{background:var(--cream);}
         <div class="stat-card"><div class="stat-num" id="dash-reste">—</div><div class="stat-label">Reste à encaisser au salon</div></div>
         <div class="stat-card"><div class="stat-num" id="dash-panier">—</div><div class="stat-label">Panier moyen par rendez-vous</div></div>
         <div class="stat-card"><div class="stat-num" id="dash-pending">—</div><div class="stat-label">En attente sur la période</div></div>
+        <div class="stat-card"><div class="stat-num" id="dash-materiel">—</div><div class="stat-label">Coût matériel</div></div>
+        <div class="stat-card"><div class="stat-num" id="dash-mo">—</div><div class="stat-label">Main-d'œuvre (avant charges)</div></div>
       </div>
 
       <div class="content-title" style="font-size:1.1rem;margin-bottom:12px;">Prestations les plus vendues (période sélectionnée)</div>
@@ -302,8 +304,9 @@ tr:hover td{background:var(--cream);}
             <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Prestation</th>
             <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Nb</th>
             <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">CA</th>
+            <th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Main-d'œuvre</th>
           </tr></thead>
-          <tbody id="dash-top-prest"><tr><td colspan="3" style="padding:16px 14px;color:var(--taupe);">Chargement...</td></tr></tbody>
+          <tbody id="dash-top-prest"><tr><td colspan="4" style="padding:16px 14px;color:var(--taupe);">Chargement...</td></tr></tbody>
         </table>
       </div>
 
@@ -426,6 +429,7 @@ tr:hover td{background:var(--cream);}
           <div class="field"><label>Prix (€)</label><input type="number" id="pf-prix" placeholder="150"></div>
           <div class="field"><label>Durée (minutes)</label><input type="number" id="pf-dur" placeholder="120"></div>
         </div>
+        <div class="field" style="margin-bottom:12px;"><label>Coût matériel (€) — vide = calcul automatique</label><input type="number" step="0.01" id="pf-cout" placeholder="Automatique"><div id="pf-cout-auto" style="font-size:.72rem;color:var(--taupe-dark);margin-top:4px;"></div></div>
         <div style="display:flex;gap:10px;margin-top:4px;">
           <button class="btn" onclick="savePrest()">Enregistrer</button>
           <button class="btn btn-outline" onclick="resetPrestForm()">Annuler</button>
@@ -1043,6 +1047,7 @@ async function initApp() {
   document.getElementById('dash-today').textContent = now.toLocaleDateString('fr-FR', opts);
   adminYear = now.getFullYear();
   adminMonth = now.getMonth();
+  await chargerCoutsPerso();
   await loadDashboard();
   renderAdminCal();
   rafraichirCloche(true);
@@ -1159,20 +1164,24 @@ async function renderDashboardStats() {
   document.getElementById('dash-reste').textContent = (ca - acompte).toLocaleString('fr-FR') + ' €';
   document.getElementById('dash-panier').textContent = nbRdv ? Math.round(ca / nbRdv).toLocaleString('fr-FR') + ' €' : '0 €';
   document.getElementById('dash-pending').textContent = pending;
+  const materiel = inRange.reduce((s, r) => s + coutMateriel(r.prestation_nom), 0);
+  document.getElementById('dash-materiel').textContent = fmtEur(materiel);
+  document.getElementById('dash-mo').textContent = fmtEur(ca - materiel);
 
   const byPrest = {};
   inRange.forEach(r => {
     const key = r.prestation_nom || 'Autre';
-    if (!byPrest[key]) byPrest[key] = { nb: 0, ca: 0 };
+    if (!byPrest[key]) byPrest[key] = { nb: 0, ca: 0, mo: 0 };
     byPrest[key].nb++;
     byPrest[key].ca += Number(r.prix) || 0;
+    byPrest[key].mo += mainOeuvre(r);
   });
   const top = Object.entries(byPrest).sort((a, b) => b[1].ca - a[1].ca).slice(0, 8);
   const tbody = document.getElementById('dash-top-prest');
   if (top.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" style="padding:16px 14px;color:var(--taupe);text-align:center;">Aucune prestation sur cette période.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="padding:16px 14px;color:var(--taupe);text-align:center;">Aucune prestation sur cette période.</td></tr>';
   } else {
-    tbody.innerHTML = top.map(([nom, v]) => `<tr style="border-top:1px solid var(--beige);"><td style="padding:10px 14px;">${nom}</td><td style="padding:10px 14px;">${v.nb}</td><td style="padding:10px 14px;">${v.ca.toLocaleString('fr-FR')} €</td></tr>`).join('');
+    tbody.innerHTML = top.map(([nom, v]) => `<tr style="border-top:1px solid var(--beige);"><td style="padding:10px 14px;">${nom}</td><td style="padding:10px 14px;">${v.nb}</td><td style="padding:10px 14px;">${v.ca.toLocaleString('fr-FR')} €</td><td style="padding:10px 14px;">${fmtEur(v.mo)}</td></tr>`).join('');
   }
 }
 
@@ -1697,10 +1706,13 @@ function updateNrTotalSummary() {
   }
   const all = [primary, ...nrExtraServices].filter(s => s.nom);
   const summary = document.getElementById('nr-total-summary');
-  if (all.length <= 1) { summary.textContent = ''; return; }
-  const totalPrix = all.reduce((s, x) => s + x.prix, 0);
+  if (all.length === 0) { summary.textContent = ''; return; }
+  const totalPrix = all.reduce((s, x) => s + (Number(x.prix) || 0), 0);
+  const totalMat = all.reduce((s, x) => s + coutMateriel(x.nom), 0);
+  const ligneMo = `Matériel : ${fmtEur(totalMat)} · Main-d'œuvre : <strong>${fmtEur(totalPrix - totalMat)}</strong>`;
+  if (all.length === 1) { summary.innerHTML = ligneMo; return; }
   const totalDuree = all.reduce((s, x) => s + x.duree_min, 0);
-  summary.innerHTML = `<strong>${all.length} prestations</strong> · Total : ${totalPrix} € · ${formatDur(totalDuree)} — chaque prestation apparaîtra séparément dans le planning, à la suite.`;
+  summary.innerHTML = `<strong>${all.length} prestations</strong> · Total : ${totalPrix} € · ${formatDur(totalDuree)} — chaque prestation apparaîtra séparément dans le planning, à la suite.<br>${ligneMo}`;
 }
 
 // Empêche les doublons : tant que l'enregistrement n'est pas fini,
@@ -2199,6 +2211,7 @@ async function openModal(r) {
             ${groupRows.map(g => `<li${g.id === r.id ? ' style="font-weight:700;"' : ''}>${g.prestation_nom} — ${g.prix} €${g.id === r.id ? ' (sélectionnée)' : ` — <a href="#" onclick="openModal(rowAt(${regRow(g)}));return false;" style="color:#b08968;">voir</a>`}</li>`).join('')}
           </ul>
           <p style="font-size:.85rem;font-weight:700;margin:0;border-top:1px solid #ddd;padding-top:6px;">Total du rendez-vous : ${totalGroupe} € — déjà réglé ${totalEncaisseGroupe} € — reste ${Math.max(totalGroupe - totalEncaisseGroupe, 0)} €</p>
+          <p style="font-size:.8rem;margin:4px 0 0;">Matériel : ${fmtEur(groupRows.reduce((s, g) => s + coutMateriel(g.prestation_nom), 0))} — Main-d'œuvre : <strong>${fmtEur(groupRows.reduce((s, g) => s + mainOeuvre(g), 0))}</strong></p>
         </div>`;
     }
   }
@@ -2209,6 +2222,7 @@ async function openModal(r) {
       <strong>Date :</strong> ${fmtDateFR(r.date)} à ${r.heure}<br>
       <strong>Durée :</strong> ${formatDur(r.duree_min)}<br>
       <strong>Prix :</strong> ${r.prix} €<br>
+      <strong>Matériel :</strong> ${fmtEur(coutMateriel(r.prestation_nom))} — <strong>Main-d'œuvre :</strong> ${fmtEur(mainOeuvre(r))}<br>
       <strong>Déjà réglé :</strong> ${encaisseEnLigne(r)} € — ${paiementLigne}<br>
       <strong>Reste à encaisser :</strong> <span style="font-weight:600;color:${resteDu(r) > 0 ? 'var(--error)' : 'var(--success)'};">${resteDu(r)} €</span><br>
       <strong>Email :</strong> ${r.email || '—'}<br>
@@ -2665,7 +2679,7 @@ async function loadPrestations() {
     const total = g.subs.reduce((n, s) => n + s.items.length, 0);
     const subsHtml = g.subs.map(s => {
       const rows = s.items.map(p => `<tr>
-        <td>${p.nom}</td><td>${p.prix} €</td><td>${formatDur(p.duree_min)}</td>
+        <td>${p.nom}</td><td>${p.prix} €</td><td title="Coût matériel${coutEstPerso(p.nom) ? ' (personnalisé)' : ' (automatique)'}">${fmtEur(coutMateriel(p.nom))}${coutEstPerso(p.nom) ? ' ✎' : ''}</td><td>${formatDur(p.duree_min)}</td>
         <td>${p.actif ? '✓' : '—'}</td>
         <td>
           <button class="action-btn" onclick="editPrest(rowAt(${regRow(p)}))">Modifier</button>
@@ -2698,6 +2712,10 @@ function editPrest(p) {
   document.getElementById('pf-sous-categorie').value = p.sous_categorie || '';
   document.getElementById('pf-prix').value = p.prix;
   document.getElementById('pf-dur').value = p.duree_min;
+  editPrestAncienNom = p.nom;
+  const perso = coutsPerso[cleCout(p.nom)];
+  document.getElementById('pf-cout').value = perso !== undefined ? perso : '';
+  document.getElementById('pf-cout-auto').textContent = 'Calcul automatique : ' + fmtEur(coutAuto(p.nom));
   document.getElementById('prest-form-title').textContent = 'Modifier la prestation';
 }
 
@@ -2708,6 +2726,9 @@ function resetPrestForm() {
   document.getElementById('pf-sous-categorie').value = '';
   document.getElementById('pf-prix').value = '';
   document.getElementById('pf-dur').value = '';
+  document.getElementById('pf-cout').value = '';
+  document.getElementById('pf-cout-auto').textContent = '';
+  editPrestAncienNom = null;
   document.getElementById('prest-form-title').textContent = 'Ajouter une prestation';
 }
 
@@ -2733,6 +2754,8 @@ async function savePrest() {
       payload: { nom, prix, duree_min, actif: true, ordre, categorie, sous_categorie }
     });
   }
+  try { await enregistrerCoutPerso(nom, document.getElementById('pf-cout').value, editPrestAncienNom); }
+  catch (e) { showMsg('prest-msg', 'Prestation enregistrée, mais le coût matériel n\'a pas pu être sauvegardé.', false); resetPrestForm(); loadPrestations(); return; }
   showMsg('prest-msg', 'Prestation enregistrée !', true);
   resetPrestForm();
   loadPrestations();
@@ -2744,6 +2767,141 @@ async function togglePrest(id, actif) {
     filters: [{ col: 'id', op: 'eq', value: id }]
   });
   loadPrestations();
+}
+
+// ── COÛT MATÉRIEL ET MAIN-D'ŒUVRE ──
+// Coût moyen du matériel utilisé pour chaque prestation (extensions, adhésifs,
+// solvants, couleur, patine, soins…), calculé à partir du nom de la prestation.
+// Le prix enregistré sur le RDV est le prix après remise : la main-d'œuvre
+// (prix − matériel) tient donc compte des promotions.
+// Les frais de livraison, Ria et douane ne sont pas inclus.
+// Un coût peut être remplacé à la main dans Prestations (champ « Coût matériel »).
+const CM = {
+  bandeClassique: 2.75,       // moyenne toutes couleurs et longueurs (paquet de 20)
+  bandeInjectee: 2.90,
+  adhesif: 16 / 240,          // recharge d'adhésifs, 1 par bande
+  solvantRemontee: 17.28 / 3, // remontée et dépose kératine
+  solvantDepose: 3,           // solvant huileux, dépose bandes
+  meche: 1.10,                // kératine
+  paquetWeft: 115,            // 100 g de weft
+  anneauxLigne: 0.50,         // 12,5 micro-anneaux par ligne
+  fil: 0.13,
+  weftPaquets: { 1: 1, 2: 1, 3: 2, 4: 2, 5: 2.5 },
+  // [racines, courts, mi-longs, longs, très longs]
+  coloration: [2.16, 2.74, 3.91, 5.08, 8.59],
+  patine: [4.63, 7.10, 8.75, 14.25, 22.50],
+  balayage: [5.36, 7.97, 9.72, 15.41, 23.85],
+  lissageIndien: [8.50, 8.50, 17, 34, 51],
+  lissageTanin: [3.60, 3.60, 7.20, 14.40, 21.60],
+  soinKeratine: 4.80, soinBotox: 0.95, soinAntiFourche: 1.05
+};
+
+let coutsPerso = {};
+let editPrestAncienNom = null;
+
+function cleCout(nom) {
+  return String(nom || '').replace(/\s*\(\s*[\d.,\s]+€\s*\)/g, '').trim().toLowerCase();
+}
+
+function indexLongueur(n) {
+  if (/tr[èe]s long/.test(n)) return 4;
+  if (/mi-long|mi long/.test(n)) return 2;
+  if (/long/.test(n)) return 3;
+  if (/court/.test(n)) return 1;
+  if (/racine/.test(n)) return 0;
+  return 3;
+}
+
+function coutAuto(nom) {
+  const n = cleCout(nom);
+  const num = Number((n.match(/(\d+)/) || [])[1]) || 0;
+  const L = indexLongueur(n);
+  if (!n || n.startsWith('suppl') || n.startsWith('diagnostic') || n.includes('formation')) return 0;
+  // Soins
+  if (n.includes('soin k')) return CM.soinKeratine;
+  if (n.includes('botox')) return CM.soinBotox;
+  if (n.includes('fourche')) return CM.soinAntiFourche;
+  // Kératine
+  if (n.includes('ratine')) {
+    if (/d[ée]pose et nouvelle pose|d[ée]pose \+ nouvelle pose/.test(n)) return num * CM.meche + CM.solvantRemontee;
+    if (n.includes('nouvelle pose')) return num * CM.meche;
+    if (/d[ée]pose/.test(n)) return CM.solvantRemontee;
+  }
+  // Tissage
+  if (n.includes('tissage')) {
+    if (/d[ée]pose/.test(n)) return 0;
+    const lignes = Math.min(Math.max(num, 1), 5);
+    const petit = lignes * CM.anneauxLigne + CM.fil;
+    if (n.includes('entretien')) return petit;
+    return (CM.weftPaquets[lignes] || lignes / 2) * CM.paquetWeft + petit;
+  }
+  // Bandes adhésives
+  if (n.includes('nouvelle pose') && n.includes('bande')) {
+    return num * ((n.includes('inject') ? CM.bandeInjectee : CM.bandeClassique) + CM.adhesif);
+  }
+  if (/d[ée]pose bande/.test(n)) return CM.solvantDepose;
+  if (n.includes('pose seule') || n.includes('repose')) return num * CM.adhesif;
+  if (n.includes('entretien') || n.includes('remont')) return num * CM.adhesif + CM.solvantRemontee;
+  // Lissages
+  if (n.includes('lissage indien')) return CM.lissageIndien[L];
+  if (n.includes('tanin')) return CM.lissageTanin[L];
+  // Couleur
+  if (n.includes('balayage') || n.includes('ombr')) {
+    if (n.includes('demi')) return CM.balayage[0] / 2;
+    if (n.includes('tête entière') || n.includes('tete entiere')) return CM.balayage[0];
+    return CM.balayage[L];
+  }
+  if (n.includes('patine')) return CM.patine[L];
+  if (n.includes('coloration')) return CM.coloration[L];
+  return 0;
+}
+
+// Une ligne de RDV peut contenir plusieurs prestations (« A (50 €) + B (30 €) ») :
+// on additionne le coût de chacune.
+function coutMateriel(nomComplet) {
+  const txt = String(nomComplet || '').replace(/d[ée]pose \+ nouvelle pose/gi, 'Dépose et nouvelle pose');
+  return txt.split(' + ').reduce((s, part) => {
+    const k = cleCout(part);
+    const v = coutsPerso[k] !== undefined ? Number(coutsPerso[k]) : coutAuto(part);
+    return s + (isNaN(v) ? 0 : v);
+  }, 0);
+}
+
+function mainOeuvre(r) {
+  return (Number(r.prix) || 0) - coutMateriel(r.prestation_nom);
+}
+
+function coutEstPerso(nom) { return coutsPerso[cleCout(nom)] !== undefined; }
+
+function fmtEur(x) {
+  const v = Math.round((Number(x) || 0) * 100) / 100;
+  return v.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' €';
+}
+
+async function chargerCoutsPerso() {
+  try {
+    const { data } = await dbCall('couts_materiel', 'select');
+    coutsPerso = {};
+    (data || []).forEach(c => { coutsPerso[c.nom] = Number(c.cout); });
+  } catch (e) { coutsPerso = {}; }
+}
+
+async function enregistrerCoutPerso(nom, valeur, ancienNom) {
+  const k = cleCout(nom);
+  if (ancienNom && cleCout(ancienNom) !== k && coutsPerso[cleCout(ancienNom)] !== undefined) {
+    await dbCall('couts_materiel', 'delete', { filters: [{ col: 'nom', op: 'eq', value: cleCout(ancienNom) }] });
+    delete coutsPerso[cleCout(ancienNom)];
+  }
+  const v = String(valeur).trim() === '' ? null : parseFloat(String(valeur).replace(',', '.'));
+  if (v === null || isNaN(v)) {
+    if (coutsPerso[k] !== undefined) {
+      await dbCall('couts_materiel', 'delete', { filters: [{ col: 'nom', op: 'eq', value: k }] });
+      delete coutsPerso[k];
+    }
+    return;
+  }
+  await dbCall('couts_materiel', 'upsert', { payload: { nom: k, cout: v }, onConflict: 'nom' });
+  coutsPerso[k] = v;
 }
 
 // ── PRODUITS (vente en interne, jamais affiché sur le site public) ──
