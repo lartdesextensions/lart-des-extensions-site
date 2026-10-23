@@ -13,14 +13,20 @@ const TABLES = {
   produits: ['id','nom','prix','actif','ordre'],
   ventes_produits: ['id','produit_nom','prix','quantite','date','reservation_id','prenom','nom','created_at'],
   // Coût matériel personnalisé par prestation (admin uniquement, jamais public)
-  couts_materiel: ['nom','cout']
+  couts_materiel: ['nom','cout'],
+  // Budget du mois (admin uniquement) : une ligne par mois "AAAA-MM", contenu en JSON
+  budget_mois: ['mois','data']
 };
 
-let coutsTablePrete = false;
-async function ensureCoutsTable(db) {
-  if (coutsTablePrete) return;
-  await db.execute('CREATE TABLE IF NOT EXISTS couts_materiel (nom TEXT PRIMARY KEY, cout REAL NOT NULL)');
-  coutsTablePrete = true;
+const TABLES_AUTO = {
+  couts_materiel: 'CREATE TABLE IF NOT EXISTS couts_materiel (nom TEXT PRIMARY KEY, cout REAL NOT NULL)',
+  budget_mois: 'CREATE TABLE IF NOT EXISTS budget_mois (mois TEXT PRIMARY KEY, data TEXT NOT NULL)'
+};
+const tablesPretes = {};
+async function ensureTable(db, table) {
+  if (!TABLES_AUTO[table] || tablesPretes[table]) return;
+  await db.execute(TABLES_AUTO[table]);
+  tablesPretes[table] = true;
 }
 
 const OPS = { eq: '=', neq: '!=', gte: '>=', lte: '<=', gt: '>', lt: '<' };
@@ -124,7 +130,7 @@ exports.handler = async function (event) {
 
     if (!isAdmin(event)) return await publicRequest(db, body);
 
-    if (table === 'couts_materiel') await ensureCoutsTable(db);
+    await ensureTable(db, table);
 
     // Le mot de passe et les compteurs de connexion ne passent jamais par ici
     if (table === 'settings' && action !== 'select') {
