@@ -962,7 +962,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
       <span id="cart-total">0 €</span>
     </div>
     <div class="panier-row acompte">
-      <span>Acompte (35 %)</span>
+      <span id="cart-acompte-label">Acompte (35 %)</span>
       <span id="cart-acompte">0 €</span>
     </div>
     <div class="panier-row reste">
@@ -1033,8 +1033,9 @@ function renderCart() {
   });
 
   const total = cart.reduce((s, i) => s + i.price, 0);
-  const acompte = Math.round(total * 0.35);
+  const acompte = acomptePanier();
   const reste = total - acompte;
+  document.getElementById('cart-acompte-label').textContent = (acompte >= total && total > 0) ? 'À payer à la réservation' : (cart.some(i => /^diagnostic au salon/i.test(i.name)) ? 'Acompte (diagnostic + 35 %)' : 'Acompte (35 %)');
 
   document.getElementById('cart-total').textContent = total + ' €';
   document.getElementById('cart-acompte').textContent = acompte + ' €';
@@ -1063,10 +1064,17 @@ function toggleSupplement(row, name, price, duree) {
   }
 }
 
+// Le diagnostic au salon se paie en totalité ; le reste du panier à 35 %.
+function acomptePanier() {
+  const entier = cart.filter(i => /^diagnostic au salon/i.test(i.name)).reduce((s, i) => s + i.price, 0);
+  const reste = cart.reduce((s, i) => s + i.price, 0) - entier;
+  return Math.round(entier + reste * 0.35);
+}
+
 function continuerReservation() {
   const total = cart.reduce((s, i) => s + i.price, 0);
   if (total === 0) return;
-  const acompte = Math.round(total * 0.35);
+  const acompte = acomptePanier();
   const prestationListe = cart.map(i => i.name + ' (' + i.price + ' €)').join(' + ');
   // Durée réelle : somme des durées propres à chaque prestation du panier
   const dureeEstimee = cart.reduce((s, i) => s + (i.duree || 0), 0);

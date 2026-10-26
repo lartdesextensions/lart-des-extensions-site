@@ -1614,7 +1614,7 @@ function onNrPrestationChange() {
     updateRemise();
     document.getElementById('nr-duree').value = p.duree_min;
     if (!(editingRdvId && rdvDejaPaye(currentRdv))) {
-      document.getElementById('nr-acompte').value = Math.round(p.prix * 0.35);
+      document.getElementById('nr-acompte').value = /^diagnostic au salon/i.test(p.nom || '') ? p.prix : Math.round(p.prix * 0.35);
     }
   } else {
     customRow.style.display = 'none';

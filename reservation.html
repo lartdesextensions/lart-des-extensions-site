@@ -778,6 +778,25 @@ let paypalButtonsRendered = false;
 let appConfig = null;
 let paymentType = 'acompte'; // 'acompte' (35 %) ou 'total'
 
+// Le diagnostic au salon se paie en totalité à la réservation ; les autres
+// prestations gardent un acompte de 35 %.
+function acompteReservation(nom, prix) {
+  const parts = String(nom || '').split(' + ');
+  let entier = 0, trouve = false;
+  for (const part of parts) {
+    if (/^\s*diagnostic au salon/i.test(part)) {
+      trouve = true;
+      const m = part.match(/\((\d+(?:[.,]\d+)?)\s*€\)/);
+      entier += m ? parseFloat(m[1].replace(',', '.')) : (parts.length === 1 ? Number(prix) : 50);
+    }
+  }
+  if (!trouve) return Math.round(Number(prix) * 0.35);
+  entier = Math.min(entier, Number(prix));
+  return Math.round(entier + (Number(prix) - entier) * 0.35);
+}
+
+function toutAPayer(p) { return acompteReservation(p.nom, p.prix) >= p.prix; }
+
 async function getAppConfig() {
   if (appConfig) return appConfig;
   try {
@@ -794,7 +813,7 @@ function fillRecap() {
   const p = selected.prestation;
   const [y, m, d] = selected.date.split('-').map(Number);
   const dateLabel = `${d} ${MONTHS_FR[m-1]} ${y}`;
-  const acompte = Math.round(p.prix * 0.35);
+  const acompte = acompteReservation(p.nom, p.prix);
   document.getElementById('recap-prest').textContent = p.nom;
   document.getElementById('recap-dur').textContent = formatDur(p.duree_min);
   document.getElementById('recap-date').textContent = dateLabel;
@@ -804,6 +823,8 @@ function fillRecap() {
   document.getElementById('opt-acompte-amt').textContent = `${acompte} €`;
   document.getElementById('opt-total-amt').textContent = `${p.prix} €`;
   document.getElementById('payment-msg').style.display = 'none';
+  document.getElementById('opt-acompte').style.display = toutAPayer(p) ? 'none' : '';
+  if (toutAPayer(p)) paymentType = 'total';
   setPaymentType(paymentType);
   backToAmount();
 }
@@ -811,13 +832,14 @@ function fillRecap() {
 // Montant réellement demandé selon le choix de la cliente
 function montantAPayer() {
   const p = selected.prestation;
-  return paymentType === 'total' ? p.prix : Math.round(p.prix * 0.35);
+  return (paymentType === 'total' || toutAPayer(p)) ? p.prix : acompteReservation(p.nom, p.prix);
 }
 
 function setPaymentType(type) {
   paymentType = (type === 'total') ? 'total' : 'acompte';
   const p = selected.prestation;
   if (!p) return;
+  if (toutAPayer(p)) paymentType = 'total';
 
   document.getElementById('opt-acompte').classList.toggle('active', paymentType === 'acompte');
   document.getElementById('opt-total').classList.toggle('active', paymentType === 'total');
@@ -827,9 +849,11 @@ function setPaymentType(type) {
   document.getElementById('btn-payer-amt').textContent = `${montant} €`;
   document.getElementById('pm-amount').textContent = `${montant} €`;
 
-  document.getElementById('note-paiement').innerHTML = paymentType === 'total'
+  document.getElementById('note-paiement').innerHTML = toutAPayer(p)
+    ? `✓ Le diagnostic au salon (${p.prix} €) se règle en totalité à la réservation. Il sera déduit de votre prochaine prestation.`
+    : paymentType === 'total'
     ? `✓ Vous réglez l'intégralité de votre prestation (${p.prix} €). Rien à régler le jour du rendez-vous.`
-    : `⚠️ Un acompte de 35 % (${montant} €) est demandé pour confirmer votre réservation. Le solde de ${p.prix - montant} € sera à régler au salon.`;
+    : `⚠️ Un acompte de ${montant} € est demandé pour confirmer votre réservation${/diagnostic au salon/i.test(p.nom) ? ' (diagnostic au salon payé en totalité + 35 % du reste)' : ' (35 %)'}. Le solde de ${p.prix - montant} € sera à régler au salon.`;
 }
 
 // ── NAVIGATION MONTANT → MOYEN DE PAIEMENT ──
@@ -913,7 +937,7 @@ async function ensureReservationSaved() {
   const tel = document.getElementById('f-tel').value.trim();
   const message = document.getElementById('f-message').value.trim();
   const p = selected.prestation;
-  const acompte = Math.round(p.prix * 0.35);
+  const acompte = acompteReservation(p.nom, p.prix);
 
   const { data } = await dbCall('reservations', 'insert', {
     single: true,
