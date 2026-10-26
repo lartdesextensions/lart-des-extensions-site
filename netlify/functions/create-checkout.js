@@ -1,6 +1,23 @@
 const Stripe = require('stripe');
 const { getDb } = require('./lib/turso');
 
+// Le diagnostic au salon se paie en totalité à la réservation ; les autres
+// prestations gardent un acompte de 35 %.
+function acompteReservation(nom, prix) {
+  const parts = String(nom || '').split(' + ');
+  let entier = 0, trouve = false;
+  for (const part of parts) {
+    if (/^\s*diagnostic au salon/i.test(part)) {
+      trouve = true;
+      const m = part.match(/\((\d+(?:[.,]\d+)?)\s*€\)/);
+      entier += m ? parseFloat(m[1].replace(',', '.')) : (parts.length === 1 ? Number(prix) : 50);
+    }
+  }
+  if (!trouve) return Math.round(Number(prix) * 0.35);
+  entier = Math.min(entier, Number(prix));
+  return Math.round(entier + (Number(prix) - entier) * 0.35);
+}
+
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -30,7 +47,7 @@ exports.handler = async function (event) {
     if (!prix || prix <= 0) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Prix de la prestation invalide.' }) };
     }
-    const amount = type === 'total' ? prix : Math.round(prix * 0.35);
+    const amount = type === 'total' ? prix : acompteReservation(reservation.prestation_nom, prix);
 
     const libelle = type === 'total'
       ? `Prestation — ${reservation.prestation_nom}`
