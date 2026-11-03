@@ -623,6 +623,7 @@ tr:hover td{background:var(--cream);}
 <div class="modal-bg" id="modal-new-rdv">
   <div class="modal">
     <div class="modal-title" id="nr-modal-title">Nouveau rendez-vous</div>
+    <div id="nr-groupe-info" style="display:none;background:#f7f3ee;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:.78rem;"></div>
     <div class="field-row">
       <div class="field"><label>Date</label><input type="date" id="nr-date"></div>
       <div class="field"><label>Heure</label><input type="time" id="nr-heure"></div>
@@ -772,6 +773,7 @@ tr:hover td{background:var(--cream);}
     <div class="modal-actions" id="modal-actions-main">
       <button class="btn" id="modal-confirm-btn" onclick="changeStatut('confirme')">✓ Confirmer</button>
       <button class="btn btn-outline" onclick="openEditRdvModal()">✏️ Modifier</button>
+      <button class="btn btn-outline" id="modal-resend-btn" onclick="renvoyerConfirmation()">📧 Renvoyer la confirmation</button>
       <button class="btn btn-danger" onclick="startCancelFlow()">✗ Annuler</button>
       <button class="btn btn-outline" onclick="closeModal()">Fermer</button>
     </div>
@@ -1505,6 +1507,7 @@ function buildGroupedOptions(list) {
 
 async function openNewRdvModal() {
   editingRdvId = null;
+  document.getElementById('nr-groupe-info').style.display = 'none';
   document.getElementById('nr-modal-title').textContent = 'Nouveau rendez-vous';
   document.getElementById('nr-date').value = document.getElementById('agenda-date').value || fmtDate(new Date());
   document.getElementById('nr-heure').value = '';
@@ -1556,6 +1559,7 @@ async function openEditRdvModal() {
   await ensureNrPrestationsLoaded();
 
   document.getElementById('nr-modal-title').textContent = 'Modifier le rendez-vous';
+  afficherGroupeDansEdition(currentRdv);
   document.getElementById('nr-date').value = currentRdv.date;
   document.getElementById('nr-heure').value = currentRdv.heure;
   document.getElementById('nr-prestation').value = 'autre';
@@ -2297,6 +2301,76 @@ async function openModal(r) {
   document.getElementById('modal-rdv').classList.add('open');
 }
 function closeModal() { document.getElementById('modal-rdv').classList.remove('open'); }
+
+// Dans « Modifier », un RDV à plusieurs prestations affiche toutes ses
+// prestations : celle en cours de modification, et les autres avec un accès
+// direct pour les modifier ou les retirer.
+async function afficherGroupeDansEdition(r) {
+  const box = document.getElementById('nr-groupe-info');
+  box.style.display = 'none';
+  box.innerHTML = '';
+  if (!r || !r.groupe_id) return;
+  const { data } = await dbCall('reservations', 'select', {
+    filters: [{ col: 'groupe_id', op: 'eq', value: r.groupe_id }],
+    order: [{ col: 'heure' }]
+  }).catch(() => ({ data: null }));
+  const rows = (data || []).filter(g => g.statut !== 'annule');
+  if (rows.length < 2 || editingRdvId !== r.id) return;
+  const total = rows.reduce((s, g) => s + (Number(g.prix) || 0), 0);
+  box.innerHTML = `
+    <p style="font-weight:600;margin:0 0 6px;">Ce rendez-vous comprend ${rows.length} prestations (total ${total} €) :</p>
+    <ul style="margin:0;padding-left:18px;line-height:1.9;">
+      ${rows.map(g => g.id === r.id
+        ? `<li style="font-weight:700;">${g.heure} — ${g.prestation_nom} — ${g.prix} € <span style="font-weight:400;">(en cours de modification)</span></li>`
+        : `<li>${g.heure} — ${g.prestation_nom} — ${g.prix} €
+             — <a href="#" onclick="editerAutrePrestation(rowAt(${regRow(g)}));return false;" style="color:#b08968;">modifier</a>
+             · <a href="#" onclick="retirerAutrePrestation(rowAt(${regRow(g)}));return false;" style="color:var(--error);">retirer</a></li>`
+      ).join('')}
+    </ul>`;
+  box.style.display = 'block';
+}
+
+function editerAutrePrestation(g) {
+  closeNewRdvModal();
+  currentRdv = g;
+  openEditRdvModal();
+}
+
+async function retirerAutrePrestation(g) {
+  const enCours = currentRdv;
+  currentRdv = g;
+  closeNewRdvModal();
+  await retirerPrestationDuRdv();
+  // Si le retrait a été annulé, on revient sur la prestation qu'on modifiait
+  if (document.getElementById('modal-rdv').classList.contains('open') === false && enCours && enCours.id !== g.id) {
+    currentRdv = enCours;
+  }
+}
+
+// Renvoie à la cliente l'email de confirmation à jour (toutes les prestations
+// du RDV, montant déjà réglé et reste à payer recalculés).
+async function renvoyerConfirmation() {
+  const r = currentRdv;
+  if (!r) return;
+  if (!r.email) { alert("Pas d'adresse email pour cette cliente : ajoutez-la avec « ✏️ Modifier »."); return; }
+  if (!confirm(`Renvoyer l'email de confirmation à ${r.prenom} ${r.nom} (${r.email}) ?`)) return;
+  const btn = document.getElementById('modal-resend-btn');
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    const res = await fetch('/.netlify/functions/send-confirmation', {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ reservationId: r.id })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    alert('✓ Email de confirmation renvoyé à ' + r.email);
+  } catch (err) {
+    alert("L'email n'a pas pu être envoyé : " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📧 Renvoyer la confirmation';
+  }
+}
 
 // Retire UNE prestation d'un RDV à plusieurs prestations (même groupe_id), sans
 // toucher aux autres. Si cette ligne portait le paiement en ligne (acompte /

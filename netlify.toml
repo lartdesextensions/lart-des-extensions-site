@@ -5,3 +5,8 @@
 [functions]
   node_bundler = "esbuild"
   external_node_modules = ["@libsql/client"]
+
+# Suppression automatique des réservations abandonnées (non payées depuis 24 h)
+[functions."nettoyage-reservations"]
+  schedule = "@hourly"
+  external_node_modules = ["@libsql/client"]
