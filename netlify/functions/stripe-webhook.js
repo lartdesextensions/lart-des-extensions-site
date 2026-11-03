@@ -29,10 +29,22 @@ exports.handler = async function (event) {
       const montantPaye = session.amount_total ? session.amount_total / 100 : 0;
 
       const lookup = await db.execute({
-        sql: 'SELECT prix FROM reservations WHERE id = ?',
+        sql: 'SELECT prix, groupe_id FROM reservations WHERE id = ?',
         args: [reservationId]
       });
-      const prix = lookup.rows[0] ? Number(lookup.rows[0].prix) : 0;
+      const resa = lookup.rows[0];
+      let prix = resa ? Number(resa.prix) : 0;
+
+      // Plusieurs prestations dans le même RDV (même groupe_id) : total du groupe
+      let groupRows = null;
+      if (resa && resa.groupe_id) {
+        const grp = await db.execute({
+          sql: "SELECT id, prix, prestation_nom FROM reservations WHERE groupe_id = ? AND statut != 'annule' ORDER BY heure",
+          args: [resa.groupe_id]
+        });
+        groupRows = grp.rows || [];
+        if (groupRows.length > 1) prix = groupRows.reduce((s, r) => s + (Number(r.prix) || 0), 0);
+      }
       const typePaiement = (prix && montantPaye >= prix) ? 'total' : 'acompte';
 
       const updateRes = await db.execute({
@@ -44,12 +56,24 @@ exports.handler = async function (event) {
       });
       const updated = updateRes.rows[0];
 
+      // Les autres prestations du même RDV sont confirmées aussi
+      if (updated && updated.groupe_id) {
+        await db.execute({
+          sql: `UPDATE reservations SET statut = 'confirme' WHERE groupe_id = ? AND id != ? AND statut != 'annule'`,
+          args: [updated.groupe_id, updated.id]
+        });
+      }
+
       if (updated) {
+        // Email : toutes les prestations du RDV et le total
+        const forEmail = (groupRows && groupRows.length > 1)
+          ? { ...updated, prestation_nom: groupRows.map(r => r.prestation_nom).join(' + '), prix }
+          : updated;
         // Notification interne pour le salon
-        await sendConfirmationEmail(updated);
+        await sendConfirmationEmail(forEmail);
         // Confirmation envoyée à la cliente
         if (updated.email) {
-          await sendClientConfirmationEmail(updated);
+          await sendClientConfirmationEmail(forEmail);
         }
       } else {
         console.error('Réservation introuvable pour mise à jour Stripe:', reservationId);
