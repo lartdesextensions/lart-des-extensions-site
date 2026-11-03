@@ -2271,6 +2271,8 @@ async function openModal(r) {
           </ul>
           <p style="font-size:.85rem;font-weight:700;margin:0;border-top:1px solid #ddd;padding-top:6px;">Total du rendez-vous : ${totalGroupe} € — déjà réglé ${totalEncaisseGroupe} € — reste ${Math.max(totalGroupe - totalEncaisseGroupe, 0)} €</p>
           <p style="font-size:.8rem;margin:4px 0 0;">Matériel : ${fmtEur(groupRows.reduce((s, g) => s + coutMateriel(g.prestation_nom), 0))} — Main-d'œuvre : <strong>${fmtEur(groupRows.reduce((s, g) => s + mainOeuvre(g), 0))}</strong></p>
+          <button type="button" class="btn btn-outline" style="margin-top:8px;font-size:.75rem;padding:6px 10px;border-color:var(--error);color:var(--error);" onclick="retirerPrestationDuRdv()">➖ Retirer « ${r.prestation_nom} » de ce rendez-vous</button>
+          <p style="font-size:.7rem;color:var(--taupe-dark);margin:4px 0 0;">Pour changer une prestation : cliquez sur « voir » puis « ✏️ Modifier ».</p>
         </div>`;
     }
   }
@@ -2295,6 +2297,74 @@ async function openModal(r) {
   document.getElementById('modal-rdv').classList.add('open');
 }
 function closeModal() { document.getElementById('modal-rdv').classList.remove('open'); }
+
+// Retire UNE prestation d'un RDV à plusieurs prestations (même groupe_id), sans
+// toucher aux autres. Si cette ligne portait le paiement en ligne (acompte /
+// totalité), celui-ci est reporté sur une autre prestation du RDV pour ne pas
+// le perdre. Les prestations qui suivaient sont avancées pour combler le trou.
+async function retirerPrestationDuRdv() {
+  const r = currentRdv;
+  if (!r || !r.groupe_id) return;
+  const { data: siblings } = await dbCall('reservations', 'select', {
+    filters: [{ col: 'groupe_id', op: 'eq', value: r.groupe_id }],
+    order: [{ col: 'heure' }]
+  });
+  const autres = (siblings || []).filter(g => g.id !== r.id && g.statut !== 'annule');
+  if (!autres.length) {
+    alert("C'est la seule prestation de ce rendez-vous : utilisez plutôt « Annuler » ou « Supprimer ».");
+    return;
+  }
+  if (!confirm(`Retirer « ${r.prestation_nom} » (${r.prix} €) de ce rendez-vous ?\nLes autres prestations sont conservées.`)) return;
+
+  try {
+    // 1. Le paiement déjà encaissé est reporté sur la 1re prestation restante
+    const portePaiement = r.acompte_paye || Number(r.montant_paye) > 0 || r.payment_id;
+    if (portePaiement) {
+      const cible = autres[0];
+      await dbCall('reservations', 'update', {
+        payload: {
+          acompte: Number(r.acompte) || 0,
+          acompte_paye: r.acompte_paye ? 1 : 0,
+          montant_paye: Number(r.montant_paye) || 0,
+          type_paiement: r.type_paiement || null,
+          payment_method: r.payment_method || null,
+          payment_id: r.payment_id || null,
+          message: cible.message || r.message || ''
+        },
+        filters: [{ col: 'id', op: 'eq', value: cible.id }]
+      });
+    }
+
+    // 2. Les prestations qui commençaient après celle-ci sont avancées
+    const duree = Number(r.duree_min) || 0;
+    if (duree > 0) {
+      const debut = timeToMin(r.heure);
+      for (const g of autres) {
+        const t = timeToMin(g.heure);
+        if (t > debut) {
+          const n = Math.max(t - duree, debut);
+          const hh = String(Math.floor(n / 60)).padStart(2, '0');
+          const mm = String(n % 60).padStart(2, '0');
+          await dbCall('reservations', 'update', {
+            payload: { heure: `${hh}:${mm}` },
+            filters: [{ col: 'id', op: 'eq', value: g.id }]
+          });
+        }
+      }
+    }
+
+    // 3. Suppression de la prestation retirée
+    await dbCall('reservations', 'delete', {
+      filters: [{ col: 'id', op: 'eq', value: r.id }]
+    });
+  } catch (err) {
+    alert('Le retrait de la prestation a échoué : ' + err.message);
+    return;
+  }
+  closeModal();
+  refreshAllViews();
+  alert(`✓ « ${r.prestation_nom} » a été retirée du rendez-vous.`);
+}
 
 async function changeStatut(s) {
   if (!currentRdv) return;
