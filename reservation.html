@@ -369,6 +369,7 @@ function loadPrestationFromCart() {
   const nom = sessionStorage.getItem('rdv_prestation_nom');
   const total = sessionStorage.getItem('rdv_total');
   const duree = sessionStorage.getItem('rdv_prestation_duree');
+  const detailRaw = sessionStorage.getItem('rdv_panier_detail');
 
   if (!nom || !total) {
     document.getElementById('no-prest-msg').style.display = 'block';
@@ -382,6 +383,27 @@ function loadPrestationFromCart() {
     prix: Number(total),
     duree_min: Number(duree) || 60
   };
+
+  // Détail par prestation (si disponible) : permet d'enregistrer une ligne
+  // séparée par prestation, reliées par un groupe_id, comme dans l'admin.
+  selected.services = null;
+  if (detailRaw) {
+    try {
+      const parsed = JSON.parse(detailRaw);
+      if (Array.isArray(parsed) && parsed.length) {
+        selected.services = parsed.map(s => ({
+          nom: s.nom,
+          prix: Number(s.prix) || 0,
+          duree_min: Number(s.duree_min) || 0
+        }));
+      }
+    } catch (e) {
+      console.error('Détail panier illisible', e);
+    }
+  }
+  if (!selected.services || !selected.services.length) {
+    selected.services = [selected.prestation];
+  }
 
   document.getElementById('prest-summary').style.display = 'block';
   document.getElementById('prest-summary-nom').textContent = nom;
@@ -938,23 +960,53 @@ async function ensureReservationSaved() {
   const message = document.getElementById('f-message').value.trim();
   const p = selected.prestation;
   const acompte = acompteReservation(p.nom, p.prix);
+  const services = (selected.services && selected.services.length) ? selected.services : [p];
 
-  const { data } = await dbCall('reservations', 'insert', {
-    single: true,
-    payload: {
-      prenom, nom, email, telephone: tel, message,
-      prestation_nom: p.nom,
-      date: selected.date,
-      heure: selected.heure,
-      duree_min: p.duree_min,
-      prix: p.prix,
-      acompte,
-      statut: 'en_attente',
-      acompte_paye: 0
+  if (services.length === 1) {
+    const { data } = await dbCall('reservations', 'insert', {
+      single: true,
+      payload: {
+        prenom, nom, email, telephone: tel, message,
+        prestation_nom: services[0].nom,
+        date: selected.date,
+        heure: selected.heure,
+        duree_min: services[0].duree_min || p.duree_min,
+        prix: services[0].prix,
+        acompte,
+        statut: 'en_attente',
+        acompte_paye: 0
+      }
+    });
+    currentReservationId = data.id;
+  } else {
+    // Plusieurs prestations : une ligne par prestation, reliées par un même
+    // groupe_id (comme dans l'admin). La 1re ligne porte l'acompte et sert de
+    // référence pour le paiement (create-checkout / webhook Stripe).
+    const groupeId = 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    let cursorMin = timeToMin(selected.heure);
+    for (let i = 0; i < services.length; i++) {
+      const s = services[i];
+      const hh = String(Math.floor(cursorMin / 60)).padStart(2, '0');
+      const mm = String(cursorMin % 60).padStart(2, '0');
+      const { data } = await dbCall('reservations', 'insert', {
+        single: true,
+        payload: {
+          prenom, nom, email, telephone: tel, message: i === 0 ? message : '',
+          prestation_nom: s.nom,
+          date: selected.date,
+          heure: `${hh}:${mm}`,
+          duree_min: s.duree_min,
+          prix: s.prix,
+          acompte: i === 0 ? acompte : 0,
+          statut: 'en_attente',
+          acompte_paye: 0,
+          groupe_id: groupeId
+        }
+      });
+      if (i === 0) currentReservationId = data.id;
+      cursorMin += Number(s.duree_min) || 0;
     }
-  });
-
-  currentReservationId = data.id;
+  }
 
   // Crée ou met à jour la fiche client (best-effort, ne bloque jamais le parcours de paiement)
   fetch('/.netlify/functions/upsert-client', {
