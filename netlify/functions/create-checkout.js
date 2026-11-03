@@ -35,7 +35,7 @@ exports.handler = async function (event) {
     const type = paymentType === 'total' ? 'total' : 'acompte';
     const db = getDb();
     const lookup = await db.execute({
-      sql: 'SELECT prix, prestation_nom FROM reservations WHERE id = ?',
+      sql: 'SELECT prix, prestation_nom, groupe_id FROM reservations WHERE id = ?',
       args: [reservationId]
     });
     const reservation = lookup.rows[0];
@@ -43,15 +43,36 @@ exports.handler = async function (event) {
       return { statusCode: 404, body: JSON.stringify({ error: 'Réservation introuvable.' }) };
     }
 
-    const prix = Number(reservation.prix);
+    // Plusieurs prestations dans le même RDV (même groupe_id) : on additionne
+    // toutes les lignes du groupe pour le total et l'acompte.
+    let rows = [reservation];
+    if (reservation.groupe_id) {
+      const grp = await db.execute({
+        sql: "SELECT prix, prestation_nom FROM reservations WHERE groupe_id = ? AND statut != 'annule'",
+        args: [reservation.groupe_id]
+      });
+      if (grp.rows && grp.rows.length) rows = grp.rows;
+    }
+
+    const prix = rows.reduce((s, r) => s + (Number(r.prix) || 0), 0);
     if (!prix || prix <= 0) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Prix de la prestation invalide.' }) };
     }
-    const amount = type === 'total' ? prix : acompteReservation(reservation.prestation_nom, prix);
+    let acompte;
+    if (rows.length > 1) {
+      const entier = rows
+        .filter(r => /^\s*diagnostic au salon/i.test(String(r.prestation_nom || '')))
+        .reduce((s, r) => s + (Number(r.prix) || 0), 0);
+      acompte = Math.round(entier + (prix - entier) * 0.35);
+    } else {
+      acompte = acompteReservation(reservation.prestation_nom, prix);
+    }
+    const nomComplet = rows.map(r => r.prestation_nom).join(' + ');
+    const amount = type === 'total' ? prix : acompte;
 
     const libelle = type === 'total'
-      ? `Prestation — ${reservation.prestation_nom}`
-      : `Acompte réservation — ${reservation.prestation_nom}`;
+      ? `Prestation — ${nomComplet}`
+      : `Acompte réservation — ${nomComplet}`;
 
     const base = siteUrl || process.env.URL || '';
 
