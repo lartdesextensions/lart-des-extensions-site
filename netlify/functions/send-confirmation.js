@@ -34,7 +34,7 @@ exports.handler = async function (event) {
     let toSend = reservation;
     if (reservation.groupe_id) {
       const groupRes = await db.execute({
-        sql: 'SELECT * FROM reservations WHERE groupe_id = ? ORDER BY heure',
+        sql: "SELECT * FROM reservations WHERE groupe_id = ? AND statut != 'annule' ORDER BY heure",
         args: [reservation.groupe_id]
       });
       const rows = groupRes.rows;
@@ -42,8 +42,14 @@ exports.handler = async function (event) {
         toSend = {
           ...reservation,
           prestation_nom: rows.map(r => r.prestation_nom).join(' + '),
-          prix: rows.reduce((s, r) => s + (r.prix || 0), 0),
-          acompte: rows.reduce((s, r) => s + (r.acompte || 0), 0)
+          heure: rows[0].heure,
+          prix: rows.reduce((s, r) => s + (Number(r.prix) || 0), 0),
+          acompte: rows.reduce((s, r) => s + (Number(r.acompte) || 0), 0),
+          // Montant déjà encaissé sur l'ensemble du RDV (porté par une seule ligne)
+          montant_paye: rows.reduce((s, r) => {
+            const p = Number(r.montant_paye) || 0;
+            return s + (p > 0 ? p : (r.acompte_paye ? (Number(r.acompte) || 0) : 0));
+          }, 0)
         };
       }
     }

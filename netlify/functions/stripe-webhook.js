@@ -29,10 +29,16 @@ exports.handler = async function (event) {
       const montantPaye = session.amount_total ? session.amount_total / 100 : 0;
 
       const lookup = await db.execute({
-        sql: 'SELECT prix, groupe_id FROM reservations WHERE id = ?',
+        sql: 'SELECT prix, groupe_id, acompte_paye, payment_id FROM reservations WHERE id = ?',
         args: [reservationId]
       });
       const resa = lookup.rows[0];
+
+      // Stripe renvoie parfois la même notification : si ce paiement est déjà
+      // enregistré, on ne refait rien (évite les emails en double).
+      if (resa && resa.acompte_paye && resa.payment_id && resa.payment_id === session.payment_intent) {
+        return { statusCode: 200, body: JSON.stringify({ received: true, deja_traite: true }) };
+      }
       let prix = resa ? Number(resa.prix) : 0;
 
       // Plusieurs prestations dans le même RDV (même groupe_id) : total du groupe

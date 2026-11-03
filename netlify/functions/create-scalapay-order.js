@@ -1,4 +1,5 @@
 const { getDb } = require('./lib/turso');
+const { verifierPrix } = require('./lib/catalogue');
 
 // Clé secrète : uniquement dans les variables d'environnement Netlify (SCALAPAY_API_KEY).
 // Jamais dans le code ni dans un fichier du dépôt.
@@ -51,6 +52,11 @@ exports.handler = async function (event) {
     const total = rows.reduce((s, r) => s + (Number(r.prix) || 0), 0);
     if (!total || total <= 0) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Prix de la prestation invalide.' }) };
+    }
+    const verif = await verifierPrix(rows);
+    if (!verif.ok) {
+      console.error('Prix refusé (réservation ' + reservationId + ') :', verif.raison);
+      return { statusCode: 400, body: JSON.stringify({ error: "Le montant de la réservation ne correspond pas à nos tarifs. Merci de recommencer depuis la page Prestations." }) };
     }
 
     const base = siteUrl || process.env.URL || '';

@@ -1,5 +1,6 @@
 const Stripe = require('stripe');
 const { getDb } = require('./lib/turso');
+const { verifierPrix } = require('./lib/catalogue');
 
 // Le diagnostic au salon se paie en totalité à la réservation ; les autres
 // prestations gardent un acompte de 35 %.
@@ -57,6 +58,14 @@ exports.handler = async function (event) {
     const prix = rows.reduce((s, r) => s + (Number(r.prix) || 0), 0);
     if (!prix || prix <= 0) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Prix de la prestation invalide.' }) };
+    }
+
+    // Le prix enregistré doit correspondre à la grille officielle (prestations.html) :
+    // empêche une cliente de modifier le prix dans son navigateur avant de payer.
+    const verif = await verifierPrix(rows);
+    if (!verif.ok) {
+      console.error('Prix refusé (réservation ' + reservationId + ') :', verif.raison);
+      return { statusCode: 400, body: JSON.stringify({ error: "Le montant de la réservation ne correspond pas à nos tarifs. Merci de recommencer depuis la page Prestations ou de contacter le salon." }) };
     }
     let acompte;
     if (rows.length > 1) {
