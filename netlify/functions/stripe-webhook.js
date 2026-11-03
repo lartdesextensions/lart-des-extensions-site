@@ -24,16 +24,30 @@ exports.handler = async function (event) {
 
     if (reservationId) {
       const db = getDb();
+
+      // Montant réellement encaissé, tel que Stripe le confirme
+      const montantPaye = session.amount_total ? session.amount_total / 100 : 0;
+
+      const lookup = await db.execute({
+        sql: 'SELECT prix FROM reservations WHERE id = ?',
+        args: [reservationId]
+      });
+      const prix = lookup.rows[0] ? Number(lookup.rows[0].prix) : 0;
+      const typePaiement = (prix && montantPaye >= prix) ? 'total' : 'acompte';
+
       const updateRes = await db.execute({
-        sql: `UPDATE reservations SET acompte_paye = ?, payment_method = ?, payment_id = ?, statut = ? WHERE id = ? RETURNING *`,
-        args: [1, 'stripe', session.payment_intent, 'confirme', reservationId]
+        sql: `UPDATE reservations
+              SET acompte_paye = ?, montant_paye = ?, type_paiement = ?,
+                  payment_method = ?, payment_id = ?, statut = ?
+              WHERE id = ? RETURNING *`,
+        args: [1, montantPaye, typePaiement, 'stripe', session.payment_intent, 'confirme', reservationId]
       });
       const updated = updateRes.rows[0];
 
       if (updated) {
         // Notification interne pour le salon
         await sendConfirmationEmail(updated);
-        // Confirmation envoyée à la cliente (manquait jusqu'ici pour les paiements en ligne)
+        // Confirmation envoyée à la cliente
         if (updated.email) {
           await sendClientConfirmationEmail(updated);
         }
