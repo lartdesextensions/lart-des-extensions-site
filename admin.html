@@ -2464,7 +2464,7 @@ async function finalizeCancel(remboursed) {
   let autoRefundOutcome = null; // 'success' | 'failed' | 'not_applicable'
 
   if (remboursed) {
-    if (currentRdv.payment_method === 'stripe' && currentRdv.acompte_paye) {
+    if ((currentRdv.payment_method === 'stripe' || currentRdv.payment_method === 'scalapay') && currentRdv.acompte_paye) {
       try {
         const res = await fetch('/.netlify/functions/refund', {
           method: 'POST',
@@ -2498,11 +2498,11 @@ async function finalizeCancel(remboursed) {
   refreshAllViews();
 
   if (autoRefundOutcome === 'success') {
-    alert('✓ Remboursement effectué automatiquement sur Stripe.');
+    alert('✓ Remboursement effectué automatiquement (Stripe ou Scalapay).');
   } else if (autoRefundOutcome === 'failed') {
-    alert('⚠️ Le remboursement automatique a échoué. Merci de rembourser manuellement sur le dashboard Stripe.');
+    alert('⚠️ Le remboursement automatique a échoué. Merci de rembourser manuellement depuis Stripe ou le portail Scalapay.');
   } else if (autoRefundOutcome === 'not_applicable') {
-    alert('Aucun paiement Stripe trouvé pour cette réservation (espèces ou non payée) — pensez à rembourser manuellement si besoin.');
+    alert('Aucun paiement en ligne (Stripe ou Scalapay) trouvé pour cette réservation (espèces ou non payée) — pensez à rembourser manuellement si besoin.');
   }
 }
 async function deleteRdv() {

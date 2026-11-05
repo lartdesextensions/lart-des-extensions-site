@@ -969,6 +969,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
       <span>Reste au salon</span>
       <span id="cart-reste">0 €</span>
     </div>
+    <div data-scalapay-widget data-type="cart" data-amount-selector="#cart-total" style="display:none;margin:10px 0 4px;"></div>
     <div class="panier-alert">
       L'acompte sera demandé pour confirmer votre rendez-vous.
     </div>
@@ -1118,5 +1119,6 @@ function showSub2(cat, sub, btn) {
 }
 </script>
 <script>document.addEventListener("click",function(e){document.querySelectorAll(".dd details[open]").forEach(function(d){if(!d.contains(e.target))d.removeAttribute("open")})});</script>
+<script src="scalapay-widget.js"></script>
 </body>
 </html>
