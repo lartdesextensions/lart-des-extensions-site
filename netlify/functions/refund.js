@@ -1,6 +1,7 @@
 const Stripe = require('stripe');
 const { getDb } = require('./lib/turso');
 const { isAdmin } = require('./lib/auth');
+const scalapay = require('./lib/scalapay');
 
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
@@ -24,8 +25,28 @@ exports.handler = async function (event) {
     const r = res.rows[0];
     if (!r) return json({ error: 'Réservation introuvable' }, 404);
 
+    if (r.payment_id && r.payment_method === 'scalapay') {
+      // Remboursement de la totalité encaissée via Scalapay
+      const montant = Number(r.montant_paye) || Number(r.prix) || 0;
+      if (!montant) return json({ error: 'Montant à rembourser introuvable.' }, 400);
+      const sp = await fetch(`${scalapay.apiUrl()}/v2/payments/${encodeURIComponent(r.payment_id)}/refund`, {
+        method: 'POST',
+        headers: scalapay.headers({ 'Idempotency-Key': `refund-${reservationId}-${r.payment_id}` }),
+        body: JSON.stringify({
+          refundAmount: { amount: montant.toFixed(2), currency: 'EUR' },
+          merchantRefundReference: `remb-rdv-${reservationId}`
+        })
+      });
+      const data = await sp.json().catch(() => ({}));
+      if (!sp.ok) {
+        console.error('Erreur remboursement Scalapay:', sp.status, JSON.stringify(data));
+        return json({ error: 'Scalapay : ' + (data.message || 'remboursement refusé') }, 502);
+      }
+      return json({ success: true, refund: { id: data.refundToken || data.token || r.payment_id, status: 'refunded' } });
+    }
+
     if (!r.payment_id || r.payment_method !== 'stripe') {
-      return json({ error: "Aucun paiement Stripe associé à cette réservation (paiement PayPal, espèces, ou non payée)." }, 400);
+      return json({ error: "Aucun paiement Stripe ou Scalapay associé à cette réservation (espèces, PayPal ou non payée)." }, 400);
     }
 
     const stripe = Stripe(process.env.STRIPE_SECRET_KEY);

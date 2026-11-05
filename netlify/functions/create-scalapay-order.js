@@ -1,9 +1,10 @@
 const { getDb } = require('./lib/turso');
 const { verifierPrix } = require('./lib/catalogue');
+const scalapay = require('./lib/scalapay');
 
 // Clé secrète : uniquement dans les variables d'environnement Netlify (SCALAPAY_API_KEY).
 // Jamais dans le code ni dans un fichier du dépôt.
-const SCALAPAY_API = process.env.SCALAPAY_API_URL || 'https://api.scalapay.com';
+const SCALAPAY_API = scalapay.apiUrl();
 
 // Scalapay exige que la formule demandée corresponde au contrat marchand.
 // On essaie les formules dans cet ordre et on garde la première acceptée.
@@ -59,6 +60,14 @@ exports.handler = async function (event) {
       return { statusCode: 400, body: JSON.stringify({ error: "Le montant de la réservation ne correspond pas à nos tarifs. Merci de recommencer depuis la page Prestations." }) };
     }
 
+    // Marchand « Travel » (prestation à date précise) : Scalapay exige la date
+    // du rendez-vous, obligatoirement postérieure au jour de la commande.
+    const dateRdv = String(reservation.date || '').slice(0, 10);
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateRdv) || dateRdv <= today) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Le paiement en plusieurs fois n'est pas disponible pour un rendez-vous le jour même. Merci de choisir la carte bancaire." }) };
+    }
+
     const base = siteUrl || process.env.URL || '';
     const money = (n) => ({ amount: Number(n).toFixed(2), currency: 'EUR' });
 
@@ -70,9 +79,17 @@ exports.handler = async function (event) {
         email: reservation.email || '',
         phoneNumber: reservation.telephone || ''
       },
+      billing: {
+        name: `${reservation.prenom || ''} ${reservation.nom || ''}`.trim() || 'Cliente',
+        line1: "L'Art des Extensions, 15 rue du Fond du Guichet",
+        suburb: 'Orsay',
+        postcode: '91400',
+        countryCode: 'FR',
+        phoneNumber: reservation.telephone || ''
+      },
       shipping: {
         name: `${reservation.prenom || ''} ${reservation.nom || ''}`.trim() || 'Cliente',
-        line1: "L'Art des Extensions",
+        line1: "L'Art des Extensions, 15 rue du Fond du Guichet",
         suburb: 'Orsay',
         postcode: '91400',
         countryCode: 'FR'
@@ -89,7 +106,13 @@ exports.handler = async function (event) {
         redirectCancelUrl: `${base}/reservation.html?payment=cancel&rdv=${reservationId}`
       },
       merchantReference: `rdv-${reservationId}`,
-      type: 'online'
+      channel: 'travel',
+      type: 'online',
+      extensions: {
+        industry: {
+          travel: { startDate: dateRdv }
+        }
+      }
     };
 
     // Une tentative par formule : on s'arrête à la première que Scalapay accepte.
@@ -97,11 +120,7 @@ exports.handler = async function (event) {
     for (product of PRODUCTS) {
       res = await fetch(`${SCALAPAY_API}/v2/orders`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.SCALAPAY_API_KEY}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/json'
-        },
+        headers: scalapay.headers(),
         body: JSON.stringify({ ...body, product })
       });
       data = await res.json().catch(() => ({}));

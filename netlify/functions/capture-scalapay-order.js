@@ -1,7 +1,8 @@
 const { getDb } = require('./lib/turso');
 const { sendConfirmationEmail, sendClientConfirmationEmail } = require('./lib/email');
+const scalapay = require('./lib/scalapay');
 
-const SCALAPAY_API = process.env.SCALAPAY_API_URL || 'https://api.scalapay.com';
+const SCALAPAY_API = scalapay.apiUrl();
 
 // Appelée quand la cliente revient de Scalapay : encaisse la commande, puis
 // confirme le(s) rendez-vous et envoie les emails (comme le webhook Stripe).
@@ -37,20 +38,32 @@ exports.handler = async function (event) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Aucune commande Scalapay pour cette réservation.' }) };
     }
 
-    const res = await fetch(`${SCALAPAY_API}/v2/payments/capture`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.SCALAPAY_API_KEY}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'Idempotency-Key': `capture-${reservationId}-${token}`
-      },
-      body: JSON.stringify({ token, merchantReference: `rdv-${reservationId}` })
+    // Vérifie d'abord l'état de la commande (recommandé par Scalapay).
+    const statusRes = await fetch(`${SCALAPAY_API}/v2/payments/${encodeURIComponent(token)}`, {
+      method: 'GET',
+      headers: scalapay.headers()
     });
-    const capture = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      console.error('Erreur Scalapay capture:', res.status, JSON.stringify(capture));
-      return { statusCode: 402, body: JSON.stringify({ error: capture.message || 'Paiement Scalapay non abouti.' }) };
+    const order = await statusRes.json().catch(() => ({}));
+    const statut = String(order.status || '').toLowerCase();
+    console.log('Scalapay statut commande', token, statusRes.status, statut);
+    if (!statusRes.ok) {
+      console.error('Erreur Scalapay GET order:', statusRes.status, JSON.stringify(order));
+      return { statusCode: 402, body: JSON.stringify({ error: 'Commande Scalapay introuvable ou non validée.' }) };
+    }
+
+    // Déjà encaissée côté Scalapay : on ne recapture pas.
+    if (statut !== 'charged') {
+      const res = await fetch(`${SCALAPAY_API}/v2/payments/capture`, {
+        method: 'POST',
+        headers: scalapay.headers({ 'Idempotency-Key': `capture-${reservationId}-${token}` }),
+        body: JSON.stringify({ token, merchantReference: `rdv-${reservationId}` })
+      });
+      const capture = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error('Erreur Scalapay capture:', res.status, JSON.stringify(capture));
+        return { statusCode: 402, body: JSON.stringify({ error: capture.message || 'Paiement Scalapay non abouti.' }) };
+      }
+      console.log('Scalapay capture OK', token, JSON.stringify(capture));
     }
 
     // Total du rendez-vous (toutes les prestations du groupe)
