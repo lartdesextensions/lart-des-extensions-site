@@ -615,21 +615,6 @@ tr:hover td{background:var(--cream);}
   <div class="modal" style="max-height:82vh;display:flex;flex-direction:column;">
     <div class="modal-title">Choisir une prestation</div>
     <div onclick="selectPickerItem('autre')" style="padding:12px 14px;border:1px dashed var(--beige-mid);border-radius:8px;cursor:pointer;font-size:.85rem;margin-bottom:12px;background:var(--cream);">Autre (saisie libre)</div>
-    <!-- Nouvelle pose facturée à l'unité : admin uniquement, jamais sur le site -->
-    <div style="border:1px solid var(--beige-mid);border-radius:8px;padding:12px 14px;margin-bottom:12px;background:var(--white);">
-      <div style="font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:8px;">Nouvelle pose à l'unité</div>
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-        <select id="unit-type" onchange="updateUnitTotal()" style="flex:1;min-width:180px;padding:10px 12px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.85rem;background:var(--white);">
-          <option value="bc">Bandes classiques — 9 € / bande</option>
-          <option value="bi">Bandes injectées — 9 € / bande</option>
-          <option value="kn">Kératine nouvelle pose — 3,50 € / mèche</option>
-          <option value="kd">Kératine dépose + nouvelle pose — 3,50 € / mèche</option>
-        </select>
-        <input type="number" id="unit-qte" min="1" placeholder="Nombre" oninput="updateUnitTotal()" style="width:90px;padding:10px 12px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.85rem;">
-        <button type="button" class="btn" style="width:auto;padding:10px 16px;" onclick="addUnitPrestation()">Ajouter</button>
-      </div>
-      <div id="unit-total" style="font-size:.8rem;color:var(--taupe-dark);margin-top:6px;"></div>
-    </div>
     <div id="picker-categories" style="overflow-y:auto;flex:1;"></div>
     <button class="btn btn-outline" style="margin-top:14px;" onclick="closePrestationPicker()">Fermer</button>
   </div>
@@ -654,6 +639,10 @@ tr:hover td{background:var(--cream);}
     </div>
     <div class="field-row" id="nr-custom-row" style="display:none;">
       <div class="field"><label>Nom de la prestation</label><input type="text" id="nr-nom-libre" placeholder="Ex: Retouche"></div>
+    </div>
+    <div class="field" id="nr-unit-row" style="display:none;margin-bottom:14px;">
+      <label id="nr-unit-label">Nombre</label>
+      <input type="number" id="nr-unit-qte" min="1" value="1" oninput="onNrUnitQteChange()">
     </div>
     <div class="field-row">
       <div class="field"><label>Prix (€)</label><input type="number" id="nr-prix" oninput="updateRemise()"></div>
@@ -1428,8 +1417,8 @@ async function ensureNrPrestationsLoaded() {
     filters: [{ col: 'actif', op: 'eq', value: true }],
     order: [{ col: 'ordre' }]
   });
-  nrPrestations = (data || []).concat(FORMATIONS_PRIVEES.filter(f =>
-    !(data || []).some(p => (p.nom || '').trim().toLowerCase() === f.nom.toLowerCase())));
+  nrPrestations = ajouterLignesUnite((data || []).concat(FORMATIONS_PRIVEES.filter(f =>
+    !(data || []).some(p => (p.nom || '').trim().toLowerCase() === f.nom.toLowerCase()))));
   document.getElementById('nr-prestation').innerHTML =
     '<option value="">— Choisir une prestation —</option>' +
     buildGroupedOptions(nrPrestations) +
@@ -1548,6 +1537,7 @@ async function openNewRdvModal() {
   await ensureNrPrestationsLoaded();
   document.getElementById('nr-prestation').value = '';
   updatePrimaryPickerButtonLabel();
+  document.getElementById('nr-unit-row').style.display = 'none';
   document.getElementById('nr-add-prestation').value = '';
   document.getElementById('nr-supp-nom').value = '';
   document.getElementById('nr-supp-prix').value = '';
@@ -1580,6 +1570,7 @@ async function openEditRdvModal() {
   document.getElementById('nr-heure').value = currentRdv.heure;
   document.getElementById('nr-prestation').value = 'autre';
   updatePrimaryPickerButtonLabel();
+  document.getElementById('nr-unit-row').style.display = 'none';
   document.getElementById('nr-custom-row').style.display = 'grid';
   document.getElementById('nr-nom-libre').value = currentRdv.prestation_nom || '';
   document.getElementById('nr-prix').value = currentRdv.prix || '';
@@ -1639,6 +1630,9 @@ function onNrPrestationChange() {
   } else {
     customRow.style.display = 'none';
   }
+  const pSel = val !== '' && val !== 'autre' ? nrPrestations[Number(val)] : null;
+  if (pSel && pSel.unite) document.getElementById('nr-unit-qte').value = 1;
+  majLigneUnite();
   updateNrTotalSummary();
 }
 
@@ -1650,7 +1644,10 @@ function primaryServiceFromForm() {
   if (sel.value === 'autre') {
     nom = document.getElementById('nr-nom-libre').value.trim();
   } else if (sel.value !== '') {
-    nom = nrPrestations[Number(sel.value)].nom;
+    const p = nrPrestations[Number(sel.value)];
+    nom = p.unite
+      ? UNIT_TARIFS[p.unite].nom(Math.max(1, parseInt(document.getElementById('nr-unit-qte').value, 10) || 1))
+      : p.nom;
   }
   return {
     nom,
@@ -1662,12 +1659,31 @@ function primaryServiceFromForm() {
 let pickerTarget = null;
 
 // ── Nouvelle pose facturée à l'unité (admin uniquement, jamais sur le site) ──
+// Lignes « 1 bande » / « 1 mèche » dans la liste des prestations : on choisit la
+// ligne puis on indique le nombre. Le nom enregistré contient le nombre
+// (ex. « Nouvelle pose - 6 bandes classiques (à l'unité) ») pour que le coût
+// matériel se calcule tout seul.
 const UNIT_TARIFS = {
-  bc: { prix: 9,   nom: n => `Nouvelle pose - ${n} bandes classiques (à l'unité)`, duree: [[10,40],[20,50],[30,60],[40,80],[90,180]] },
-  bi: { prix: 9,   nom: n => `Nouvelle pose - ${n} bandes injectées (à l'unité)`,  duree: [[10,40],[20,50],[30,60],[40,80],[90,180]] },
-  kn: { prix: 3.5, nom: n => `Kératine nouvelle pose - ${n} mèches (à l'unité)`,   duree: [[30,45],[50,75],[70,145],[100,195],[120,240],[150,300],[170,360],[200,390]] },
-  kd: { prix: 3.5, nom: n => `Dépose + Nouvelle pose kératine - ${n} mèches (à l'unité)`, duree: [[30,70],[50,95],[70,160],[100,220],[120,270],[150,330],[170,390],[200,420]] }
+  bc: { prix: 9,   label: "Bande classique à l'unité",  cat: 'Bandes Adhésives', sous: 'Nouvelle pose', unite: 'bande',
+        nom: n => `Nouvelle pose - ${n} ${n > 1 ? 'bandes classiques' : 'bande classique'} (à l'unité)`, duree: [[10,40],[20,50],[30,60],[40,80],[90,180]] },
+  bi: { prix: 9,   label: "Bande injectée à l'unité",   cat: 'Bandes Adhésives', sous: 'Nouvelle pose', unite: 'bande',
+        nom: n => `Nouvelle pose - ${n} ${n > 1 ? 'bandes injectées' : 'bande injectée'} (à l'unité)`, duree: [[10,40],[20,50],[30,60],[40,80],[90,180]] },
+  kn: { prix: 3.5, label: "Mèche kératine à l'unité",   cat: 'Kératine', sous: 'Nouvelle pose', unite: 'mèche',
+        nom: n => `Kératine nouvelle pose - ${n} ${n > 1 ? 'mèches' : 'mèche'} (à l'unité)`, duree: [[30,45],[50,75],[70,145],[100,195],[120,240],[150,300],[170,360],[200,390]] },
+  kd: { prix: 3.5, label: "Mèche kératine à l'unité",   cat: 'Kératine', sous: 'Dépose + Nouvelle pose', unite: 'mèche',
+        nom: n => `Dépose + Nouvelle pose kératine - ${n} ${n > 1 ? 'mèches' : 'mèche'} (à l'unité)`, duree: [[30,70],[50,95],[70,160],[100,220],[120,270],[150,330],[170,390],[200,420]] }
 };
+
+// Ajoute les lignes « à l'unité » en tête de leur sous-catégorie (Nouvelle pose…)
+function ajouterLignesUnite(list) {
+  Object.entries(UNIT_TARIFS).forEach(([code, t]) => {
+    if (list.some(p => p.unite === code)) return;
+    const ligne = { nom: t.label, prix: t.prix, duree_min: 2, categorie: t.cat, sous_categorie: t.sous, actif: true, unite: code };
+    const idx = list.findIndex(p => p.categorie === t.cat && p.sous_categorie === t.sous);
+    if (idx === -1) list.push(ligne); else list.splice(idx, 0, ligne);
+  });
+  return list;
+}
 
 function dureeInterpolee(points, n) {
   if (n <= points[0][0]) return Math.max(15, Math.round(points[0][1] * n / points[0][0] / 5) * 5);
@@ -1679,49 +1695,46 @@ function dureeInterpolee(points, n) {
   return Math.round((yb + (yb - ya) / (xb - xa) * (n - xb)) / 5) * 5;
 }
 
-function unitPrestationFromForm() {
-  const t = UNIT_TARIFS[document.getElementById('unit-type').value];
-  const n = parseInt(document.getElementById('unit-qte').value, 10);
-  if (!t || !n || n < 1) return null;
-  return {
-    nom: t.nom(n),
-    prix: Math.round(n * t.prix * 100) / 100,
-    // En plus d'un forfait (ex. forfait 40 bandes + 6 à l'unité) : pas de temps
-    // d'installation en plus, environ 2 min par bande ou par mèche.
-    duree_min: pickerTarget === 'extra' ? n * 2 : dureeInterpolee(t.duree, n),
-    categorie: "Nouvelle pose à l'unité",
-    actif: true
-  };
+// Prestation principale : la pose se fait seule, durée d'une vraie pose.
+function primaryUnitTarif() {
+  const val = document.getElementById('nr-prestation').value;
+  if (val === '' || val === 'autre') return null;
+  const p = nrPrestations[Number(val)];
+  return p && p.unite ? UNIT_TARIFS[p.unite] : null;
 }
 
-function updateUnitTotal() {
-  const p = unitPrestationFromForm();
-  document.getElementById('unit-total').textContent = p ? `Total : ${fmtEur(p.prix)} · durée estimée ${formatDur(p.duree_min)}` : '';
+function majLigneUnite() {
+  const t = primaryUnitTarif();
+  document.getElementById('nr-unit-row').style.display = t ? '' : 'none';
+  if (!t) return;
+  document.getElementById('nr-unit-label').textContent = `Nombre de ${t.unite}s`;
+  onNrUnitQteChange();
 }
 
-function addUnitPrestation() {
-  const p = unitPrestationFromForm();
-  if (!p) { document.getElementById('unit-total').textContent = 'Indique le nombre de bandes ou de mèches.'; return; }
-  if (pickerTarget === 'extra') {
-    nrExtraServices.push({ nom: p.nom, prix: p.prix, duree_min: p.duree_min });
-    renderExtraServicesList();
-    document.getElementById('unit-qte').value = '';
-    document.getElementById('unit-total').textContent = '';
-    closePrestationPicker();
-    return;
-  }
-  let i = nrPrestations.findIndex(x => x.nom === p.nom);
-  if (i === -1) {
-    nrPrestations.push(p);
-    i = nrPrestations.length - 1;
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = `${p.nom} — ${p.prix} €`;
-    document.getElementById('nr-prestation').appendChild(opt);
-  }
-  document.getElementById('unit-qte').value = '';
-  document.getElementById('unit-total').textContent = '';
-  selectPickerItem(i);
+function onNrUnitQteChange() {
+  const t = primaryUnitTarif();
+  if (!t) return;
+  const n = Math.max(1, parseInt(document.getElementById('nr-unit-qte').value, 10) || 1);
+  const prix = Math.round(n * t.prix * 100) / 100;
+  document.getElementById('nr-prix').value = prix;
+  document.getElementById('nr-duree').value = dureeInterpolee(t.duree, n);
+  if (!(editingRdvId && rdvDejaPaye(currentRdv))) document.getElementById('nr-acompte').value = Math.round(prix * 0.35);
+  updateRemise();
+  updateNrTotalSummary();
+}
+
+// Prestation ajoutée en plus d'un forfait (ex. forfait 40 + 6 bandes) :
+// pas de temps d'installation en plus, environ 2 min par bande ou mèche.
+function setExtraUnitQte(i, val) {
+  const s = nrExtraServices[i];
+  if (!s || !s.unite) return;
+  const t = UNIT_TARIFS[s.unite];
+  const n = Math.max(1, parseInt(val, 10) || 1);
+  s.qte = n;
+  s.nom = t.nom(n);
+  s.prix = Math.round(n * t.prix * 100) / 100;
+  s.duree_min = n * 2;
+  renderExtraServicesList();
 }
 
 function openPrestationPicker(target) {
@@ -1781,7 +1794,11 @@ function selectPickerItem(i) {
   } else if (pickerTarget === 'extra') {
     if (i === 'autre') { closePrestationPicker(); return; }
     const extra = nrPrestations[i];
-    if (extra) {
+    if (extra && extra.unite) {
+      const t = UNIT_TARIFS[extra.unite];
+      nrExtraServices.push({ nom: t.nom(1), prix: t.prix, duree_min: 2, unite: extra.unite, qte: 1 });
+      renderExtraServicesList();
+    } else if (extra) {
       nrExtraServices.push({ nom: extra.nom, prix: extra.prix, duree_min: extra.duree_min });
       renderExtraServicesList();
     }
@@ -1829,6 +1846,7 @@ function renderExtraServicesList() {
         <div style="display:flex;align-items:center;gap:10px;background:var(--cream);border:1px solid var(--beige-mid);border-radius:8px;padding:8px 12px;margin-bottom:6px;">
           <div style="width:10px;height:10px;border-radius:50%;background:${getPrestationColor(s.nom)};flex-shrink:0;"></div>
           <div style="flex:1;font-size:.85rem;">${s.nom} — ${s.prix} € · ${formatDur(s.duree_min)}</div>
+          ${s.unite ? `<input type="number" min="1" value="${s.qte || 1}" onchange="setExtraUnitQte(${i}, this.value)" title="Nombre" style="width:64px;padding:6px 8px;border:1px solid var(--beige-mid);border-radius:6px;font-family:'Poppins',sans-serif;font-size:.85rem;">` : ''}
           <button type="button" onclick="removeExtraService(${i})" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:.9rem;">✕</button>
         </div>`).join('');
   }
