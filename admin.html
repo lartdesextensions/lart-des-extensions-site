@@ -1686,7 +1686,9 @@ function unitPrestationFromForm() {
   return {
     nom: t.nom(n),
     prix: Math.round(n * t.prix * 100) / 100,
-    duree_min: dureeInterpolee(t.duree, n),
+    // En plus d'un forfait (ex. forfait 40 bandes + 6 à l'unité) : pas de temps
+    // d'installation en plus, environ 2 min par bande ou par mèche.
+    duree_min: pickerTarget === 'extra' ? n * 2 : dureeInterpolee(t.duree, n),
     categorie: "Nouvelle pose à l'unité",
     actif: true
   };
@@ -1700,6 +1702,14 @@ function updateUnitTotal() {
 function addUnitPrestation() {
   const p = unitPrestationFromForm();
   if (!p) { document.getElementById('unit-total').textContent = 'Indique le nombre de bandes ou de mèches.'; return; }
+  if (pickerTarget === 'extra') {
+    nrExtraServices.push({ nom: p.nom, prix: p.prix, duree_min: p.duree_min });
+    renderExtraServicesList();
+    document.getElementById('unit-qte').value = '';
+    document.getElementById('unit-total').textContent = '';
+    closePrestationPicker();
+    return;
+  }
   let i = nrPrestations.findIndex(x => x.nom === p.nom);
   if (i === -1) {
     nrPrestations.push(p);
