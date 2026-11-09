@@ -12,6 +12,16 @@ const SCALAPAY_API = scalapay.apiUrl();
 const PRODUCTS = (process.env.SCALAPAY_PRODUCTS || 'pay-in-3,pay-in-4')
   .split(',').map((p) => p.trim()).filter(Boolean);
 
+// Scalapay exige le téléphone au format international (ex. +33612345678).
+function formatTelephone(tel) {
+  let t = String(tel || '').replace(/[^\d+]/g, '');
+  if (t.startsWith('00')) t = '+' + t.slice(2);
+  if (/^0\d{9}$/.test(t)) t = '+33' + t.slice(1);
+  if (/^[67]\d{8}$/.test(t)) t = '+33' + t;
+  if (/^33\d{9}$/.test(t)) t = '+' + t;
+  return t;
+}
+
 exports.handler = async function (event) {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -74,25 +84,10 @@ exports.handler = async function (event) {
     const body = {
       totalAmount: money(total),
       consumer: {
-        givenNames: reservation.prenom || '-',
-        surname: reservation.nom || '-',
+        givenNames: String(reservation.prenom || '').trim(),
+        surname: String(reservation.nom || '').trim(),
         email: reservation.email || '',
-        phoneNumber: reservation.telephone || ''
-      },
-      billing: {
-        name: `${reservation.prenom || ''} ${reservation.nom || ''}`.trim() || 'Cliente',
-        line1: "L'Art des Extensions, 15 rue du Fond du Guichet",
-        suburb: 'Orsay',
-        postcode: '91400',
-        countryCode: 'FR',
-        phoneNumber: reservation.telephone || ''
-      },
-      shipping: {
-        name: `${reservation.prenom || ''} ${reservation.nom || ''}`.trim() || 'Cliente',
-        line1: "L'Art des Extensions, 15 rue du Fond du Guichet",
-        suburb: 'Orsay',
-        postcode: '91400',
-        countryCode: 'FR'
+        phoneNumber: formatTelephone(reservation.telephone)
       },
       items: rows.map((r, i) => ({
         name: r.prestation_nom || 'Prestation',
