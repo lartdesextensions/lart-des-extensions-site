@@ -589,10 +589,8 @@ async function loadMonthBookings(start, end) {
   const now = Date.now();
   const PENDING_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
   const activeRdvs = (rdvs || []).filter(r => {
-    if (r.statut === 'en_attente' && !r.acompte_paye && r.created_at) {
-      const created = new Date(String(r.created_at).replace(' ', 'T') + 'Z').getTime();
-      if (!isNaN(created) && (now - created) > PENDING_TIMEOUT_MS) return false;
-    }
+    // Réservation non payée : ne bloque jamais le créneau
+    if (r.statut === 'en_attente' && !r.acompte_paye && !(Number(r.montant_paye) > 0)) return false;
     return true;
   });
 
@@ -690,10 +688,8 @@ async function renderSlots(dateStr, avail) {
     const now = Date.now();
     const PENDING_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
     const activeRdvs = (rdvs || []).filter(r => {
-      if (r.statut === 'en_attente' && !r.acompte_paye && r.created_at) {
-        const created = new Date(String(r.created_at).replace(' ', 'T') + 'Z').getTime();
-        if (!isNaN(created) && (now - created) > PENDING_TIMEOUT_MS) return false;
-      }
+      // Réservation non payée : ne bloque jamais le créneau
+      if (r.statut === 'en_attente' && !r.acompte_paye && !(Number(r.montant_paye) > 0)) return false;
       return true;
     });
     const rdvOccupations = activeRdvs.map(r => ({ heure: r.heure, duree_min: r.duree_min }));
@@ -964,10 +960,8 @@ async function verifierCreneauDisponible() {
 
   const now = Date.now();
   const actifs = (rdvs || []).filter(r => {
-    if (r.statut === 'en_attente' && !r.acompte_paye && r.created_at) {
-      const created = new Date(String(r.created_at).replace(' ', 'T') + 'Z').getTime();
-      if (!isNaN(created) && (now - created) > 20 * 60 * 1000) return false;
-    }
+    // Réservation non payée : ne bloque jamais le créneau
+    if (r.statut === 'en_attente' && !r.acompte_paye && !(Number(r.montant_paye) > 0)) return false;
     return true;
   });
   const occupations = actifs.map(r => ({ heure: r.heure, duree_min: r.duree_min }))
