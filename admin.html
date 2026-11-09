@@ -503,7 +503,8 @@ tr:hover td{background:var(--cream);}
         <div class="form-card-title" id="produit-form-title">Ajouter un produit</div>
         <div class="field-row">
           <div class="field"><label>Nom</label><input type="text" id="pdf-nom" placeholder="Ex: Shampoing 1L"></div>
-          <div class="field"><label>Prix (€)</label><input type="number" id="pdf-prix" placeholder="36"></div>
+          <div class="field"><label>Coût d'achat (€)</label><input type="number" step="0.01" id="pdf-cout" placeholder="Ex: 9.42"></div>
+          <div class="field"><label>Prix (€)</label><input type="number" step="0.01" id="pdf-prix" placeholder="36"></div>
         </div>
         <div style="display:flex;gap:10px;margin-top:4px;">
           <button class="btn" onclick="saveProduit()">Enregistrer</button>
@@ -614,6 +615,21 @@ tr:hover td{background:var(--cream);}
   <div class="modal" style="max-height:82vh;display:flex;flex-direction:column;">
     <div class="modal-title">Choisir une prestation</div>
     <div onclick="selectPickerItem('autre')" style="padding:12px 14px;border:1px dashed var(--beige-mid);border-radius:8px;cursor:pointer;font-size:.85rem;margin-bottom:12px;background:var(--cream);">Autre (saisie libre)</div>
+    <!-- Nouvelle pose facturée à l'unité : admin uniquement, jamais sur le site -->
+    <div style="border:1px solid var(--beige-mid);border-radius:8px;padding:12px 14px;margin-bottom:12px;background:var(--white);">
+      <div style="font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:8px;">Nouvelle pose à l'unité</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <select id="unit-type" onchange="updateUnitTotal()" style="flex:1;min-width:180px;padding:10px 12px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.85rem;background:var(--white);">
+          <option value="bc">Bandes classiques — 9 € / bande</option>
+          <option value="bi">Bandes injectées — 9 € / bande</option>
+          <option value="kn">Kératine nouvelle pose — 3,50 € / mèche</option>
+          <option value="kd">Kératine dépose + nouvelle pose — 3,50 € / mèche</option>
+        </select>
+        <input type="number" id="unit-qte" min="1" placeholder="Nombre" oninput="updateUnitTotal()" style="width:90px;padding:10px 12px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.85rem;">
+        <button type="button" class="btn" style="width:auto;padding:10px 16px;" onclick="addUnitPrestation()">Ajouter</button>
+      </div>
+      <div id="unit-total" style="font-size:.8rem;color:var(--taupe-dark);margin-top:6px;"></div>
+    </div>
     <div id="picker-categories" style="overflow-y:auto;flex:1;"></div>
     <button class="btn btn-outline" style="margin-top:14px;" onclick="closePrestationPicker()">Fermer</button>
   </div>
@@ -1454,7 +1470,7 @@ function addProduitToRdv() {
   const p = nrProduits[Number(i)];
   if (!p) return;
   const qte = Number(document.getElementById('nr-produit-qte').value) || 1;
-  nrExtraProduits.push({ nom: p.nom, prix: p.prix, quantite: qte });
+  nrExtraProduits.push({ nom: p.nom, prix: p.prix, cout: p.cout, quantite: qte });
   sel.value = '';
   document.getElementById('nr-produit-qte').value = '1';
   renderNrProduitsList();
@@ -1644,6 +1660,59 @@ function primaryServiceFromForm() {
 }
 
 let pickerTarget = null;
+
+// ── Nouvelle pose facturée à l'unité (admin uniquement, jamais sur le site) ──
+const UNIT_TARIFS = {
+  bc: { prix: 9,   nom: n => `Nouvelle pose - ${n} bandes classiques (à l'unité)`, duree: [[10,40],[20,50],[30,60],[40,80],[90,180]] },
+  bi: { prix: 9,   nom: n => `Nouvelle pose - ${n} bandes injectées (à l'unité)`,  duree: [[10,40],[20,50],[30,60],[40,80],[90,180]] },
+  kn: { prix: 3.5, nom: n => `Kératine nouvelle pose - ${n} mèches (à l'unité)`,   duree: [[30,45],[50,75],[70,145],[100,195],[120,240],[150,300],[170,360],[200,390]] },
+  kd: { prix: 3.5, nom: n => `Dépose + Nouvelle pose kératine - ${n} mèches (à l'unité)`, duree: [[30,70],[50,95],[70,160],[100,220],[120,270],[150,330],[170,390],[200,420]] }
+};
+
+function dureeInterpolee(points, n) {
+  if (n <= points[0][0]) return Math.max(15, Math.round(points[0][1] * n / points[0][0] / 5) * 5);
+  for (let i = 1; i < points.length; i++) {
+    const [x0, y0] = points[i - 1], [x1, y1] = points[i];
+    if (n <= x1) return Math.round((y0 + (y1 - y0) * (n - x0) / (x1 - x0)) / 5) * 5;
+  }
+  const [xa, ya] = points[points.length - 2], [xb, yb] = points[points.length - 1];
+  return Math.round((yb + (yb - ya) / (xb - xa) * (n - xb)) / 5) * 5;
+}
+
+function unitPrestationFromForm() {
+  const t = UNIT_TARIFS[document.getElementById('unit-type').value];
+  const n = parseInt(document.getElementById('unit-qte').value, 10);
+  if (!t || !n || n < 1) return null;
+  return {
+    nom: t.nom(n),
+    prix: Math.round(n * t.prix * 100) / 100,
+    duree_min: dureeInterpolee(t.duree, n),
+    categorie: "Nouvelle pose à l'unité",
+    actif: true
+  };
+}
+
+function updateUnitTotal() {
+  const p = unitPrestationFromForm();
+  document.getElementById('unit-total').textContent = p ? `Total : ${fmtEur(p.prix)} · durée estimée ${formatDur(p.duree_min)}` : '';
+}
+
+function addUnitPrestation() {
+  const p = unitPrestationFromForm();
+  if (!p) { document.getElementById('unit-total').textContent = 'Indique le nombre de bandes ou de mèches.'; return; }
+  let i = nrPrestations.findIndex(x => x.nom === p.nom);
+  if (i === -1) {
+    nrPrestations.push(p);
+    i = nrPrestations.length - 1;
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${p.nom} — ${p.prix} €`;
+    document.getElementById('nr-prestation').appendChild(opt);
+  }
+  document.getElementById('unit-qte').value = '';
+  document.getElementById('unit-total').textContent = '';
+  selectPickerItem(i);
+}
 
 function openPrestationPicker(target) {
   pickerTarget = target;
@@ -1923,7 +1992,7 @@ async function saveNewRdvInner() {
       for (const p of nrExtraProduits) {
         await dbCall('ventes_produits', 'insert', {
           payload: {
-            produit_nom: p.nom, prix: p.prix, quantite: p.quantite,
+            produit_nom: p.nom, prix: p.prix, cout: p.cout != null ? p.cout : null, quantite: p.quantite,
             date, reservation_id: rdvIdPourProduits, prenom, nom
           }
         });
@@ -3343,7 +3412,8 @@ async function loadProduits() {
   container.innerHTML = `<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:.85rem;"><tbody>` +
     allProduits.map(p => `<tr>
       <td style="padding:10px 14px;">${p.nom}</td>
-      <td style="padding:10px 14px;">${p.prix} €</td>
+      <td style="padding:10px 14px;">${fmtEur(p.prix)}</td>
+      <td style="padding:10px 14px;color:var(--taupe-dark);">${p.cout != null ? 'coût ' + fmtEur(p.cout) + ' · marge <strong>' + fmtEur(p.prix - p.cout) + '</strong>' : 'coût non renseigné'}</td>
       <td style="padding:10px 14px;">${p.actif ? '✓' : '—'}</td>
       <td style="padding:10px 14px;text-align:right;white-space:nowrap;">
         <button class="action-btn" onclick="editProduit(rowAt(${regRow(p)}))">Modifier</button>
@@ -3363,6 +3433,7 @@ function editProduit(p) {
   editProduitId = p.id;
   document.getElementById('pdf-nom').value = p.nom;
   document.getElementById('pdf-prix').value = p.prix;
+  document.getElementById('pdf-cout').value = p.cout != null ? p.cout : '';
   document.getElementById('produit-form-title').textContent = 'Modifier le produit';
 }
 
@@ -3370,16 +3441,19 @@ function resetProduitForm() {
   editProduitId = null;
   document.getElementById('pdf-nom').value = '';
   document.getElementById('pdf-prix').value = '';
+  document.getElementById('pdf-cout').value = '';
   document.getElementById('produit-form-title').textContent = 'Ajouter un produit';
 }
 
 async function saveProduit() {
   const nom = document.getElementById('pdf-nom').value.trim();
   const prix = parseFloat(document.getElementById('pdf-prix').value);
+  const coutTxt = document.getElementById('pdf-cout').value;
+  const cout = coutTxt === '' ? null : parseFloat(coutTxt);
   if (!nom || isNaN(prix) || prix < 0) { showMsg('produit-msg', 'Le nom et le prix sont requis.', false); return; }
   if (editProduitId) {
     await dbCall('produits', 'update', {
-      payload: { nom, prix },
+      payload: { nom, prix, cout },
       filters: [{ col: 'id', op: 'eq', value: editProduitId }]
     });
   } else {
@@ -3389,7 +3463,7 @@ async function saveProduit() {
     });
     const ordre = max?.[0]?.ordre + 1 || 1;
     await dbCall('produits', 'insert', {
-      payload: { nom, prix, actif: true, ordre }
+      payload: { nom, prix, cout, actif: true, ordre }
     });
   }
   showMsg('produit-msg', 'Produit enregistré !', true);
@@ -3425,11 +3499,13 @@ async function saveVenteRapide() {
   const msg = document.getElementById('vr-msg');
   const val = document.getElementById('vr-produit').value;
   let nom = '';
+  let cout = null;
   if (val === 'autre') {
     nom = document.getElementById('vr-nom-libre').value.trim();
   } else if (val !== '') {
     const p = allProduits[Number(val)];
     nom = p ? p.nom : '';
+    cout = p && p.cout != null ? p.cout : null;
   }
   const prix = Number(document.getElementById('vr-prix').value) || 0;
   const quantite = Number(document.getElementById('vr-quantite').value) || 1;
@@ -3449,7 +3525,7 @@ async function saveVenteRapide() {
   }
 
   await dbCall('ventes_produits', 'insert', {
-    payload: { produit_nom: nom, prix, quantite, date, reservation_id: null, prenom, nom: clNom }
+    payload: { produit_nom: nom, prix, cout, quantite, date, reservation_id: null, prenom, nom: clNom }
   });
 
   msg.style.color = 'var(--success)';
