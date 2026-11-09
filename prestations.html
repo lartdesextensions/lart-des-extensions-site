@@ -293,6 +293,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
   <div>
     <h1>Réserver un <em>rendez-vous</em></h1>
     <p>Choisissez votre prestation et ajoutez-la au panier.<br>Un acompte sera demandé pour confirmer votre réservation.</p>
+    <p class="sp-badge" data-scalapay-badge style="display:none;align-items:center;gap:8px;margin-top:10px;font-size:.8rem;">Paiement en 3 ou 4 fois sans frais avec <img src="https://universe.scalapay.com/wp-content/uploads/2022/08/Scalapay_Logo_Primary_Black_1.png" alt="Scalapay" style="height:18px;width:auto;vertical-align:middle;" onerror="this.parentNode.style.display='none'"></p>
   </div>
   <div class="diag-alert">
     <span style="font-size:18px;flex-shrink:0;">⚠</span>
@@ -1120,5 +1121,9 @@ function showSub2(cat, sub, btn) {
 </script>
 <script>document.addEventListener("click",function(e){document.querySelectorAll(".dd details[open]").forEach(function(d){if(!d.contains(e.target))d.removeAttribute("open")})});</script>
 <script src="scalapay-widget.js"></script>
+<script>
+// Logo Scalapay (page des prestations) : visible seulement si Scalapay est actif
+if (window.scalapayConfig) window.scalapayConfig().then(c => { if (c.active) document.querySelectorAll('[data-scalapay-badge]').forEach(e => e.style.display = 'flex'); });
+</script>
 </body>
 </html>
