@@ -10,8 +10,8 @@ const TABLES = {
   clients_bloques: ['id','email','telephone','raison','created_at'],
   clients: ['id','prenom','nom','telephone','email','notes','created_at','updated_at'],
   settings: ['key','value'],
-  produits: ['id','nom','prix','actif','ordre'],
-  ventes_produits: ['id','produit_nom','prix','quantite','date','reservation_id','prenom','nom','created_at'],
+  produits: ['id','nom','prix','cout','actif','ordre'],
+  ventes_produits: ['id','produit_nom','prix','cout','quantite','date','reservation_id','prenom','nom','created_at'],
   // Coût matériel personnalisé par prestation (admin uniquement, jamais public)
   couts_materiel: ['nom','cout'],
   // Budget du mois (admin uniquement) : une ligne par mois "AAAA-MM", contenu en JSON
@@ -19,6 +19,9 @@ const TABLES = {
 };
 
 const TABLES_AUTO = {
+  // Produits vendus au salon (admin uniquement) : prix de vente + coût d'achat
+  produits: 'CREATE TABLE IF NOT EXISTS produits (id INTEGER PRIMARY KEY AUTOINCREMENT, nom TEXT NOT NULL, prix REAL NOT NULL, cout REAL, actif INTEGER DEFAULT 1, ordre INTEGER DEFAULT 0)',
+  ventes_produits: 'CREATE TABLE IF NOT EXISTS ventes_produits (id INTEGER PRIMARY KEY AUTOINCREMENT, produit_nom TEXT NOT NULL, prix REAL NOT NULL, cout REAL, quantite INTEGER DEFAULT 1, date TEXT NOT NULL, reservation_id INTEGER, prenom TEXT, nom TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)',
   couts_materiel: 'CREATE TABLE IF NOT EXISTS couts_materiel (nom TEXT PRIMARY KEY, cout REAL NOT NULL)',
   budget_mois: 'CREATE TABLE IF NOT EXISTS budget_mois (mois TEXT PRIMARY KEY, data TEXT NOT NULL)'
 };
