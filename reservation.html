@@ -121,6 +121,11 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
 .pm-txt{display:flex;flex-direction:column;gap:2px;}
 .pm-t{font-size:.9rem;font-weight:600;color:var(--dark);}
 .pm-s{font-size:.72rem;color:var(--taupe-dark);line-height:1.35;}
+.pm-group{background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;margin-bottom:10px;overflow:hidden;transition:border-color .2s,box-shadow .2s;}
+.pm-group:hover{border-color:var(--dark);box-shadow:0 2px 10px rgba(0,0,0,.06);}
+.pm-group .pay-method{border:none;border-radius:0;margin-bottom:0;box-shadow:none;padding-bottom:6px;}
+.pm-group-widget{padding:0 16px 14px 84px;}
+@media(max-width:480px){.pm-group-widget{padding-left:16px;}}
 
 /* BUTTONS */
 .btn{width:100%;padding:15px;background:var(--dark);color:var(--white);border:none;border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;font-weight:500;letter-spacing:.06em;cursor:pointer;transition:background .2s;margin-top:8px;}
@@ -288,14 +293,16 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
           </button>
 
           <!-- Scalapay : paiement en 3 ou 4 fois, toujours sur la totalité -->
-          <button type="button" class="pay-method" id="pm-scalapay" style="display:none" onclick="payWithScalapay()">
+          <div class="pm-group" id="pm-scalapay-group" style="display:none">
+          <button type="button" class="pay-method" id="pm-scalapay" onclick="payWithScalapay()">
             <span class="pm-ico">🗓️</span>
             <span class="pm-txt">
               <span class="pm-t">Payer en 3 ou 4 fois avec Scalapay</span>
               <span class="pm-s">Sur la totalité de la prestation (<span id="pm-scalapay-amt">—</span>)</span>
             </span>
           </button>
-          <div data-scalapay-widget data-type="checkout" data-amount-selector="#opt-total-amt" id="scalapay-checkout-widget" style="display:none;margin:-2px 0 10px;"></div>
+          <div data-scalapay-widget data-type="checkout" data-amount-selector="#opt-total-amt" id="scalapay-checkout-widget" class="pm-group-widget"></div>
+          </div>
         </div>
 
         <div id="paypal-wrap" style="display:none;">
@@ -902,7 +909,7 @@ function showPaymentMethods() {
 
   // Scalapay : seulement s'il est activé, et pas pour un rendez-vous le jour même
   // (Scalapay exige une date de prestation postérieure à la commande).
-  const btnSp = document.getElementById('pm-scalapay');
+  const btnSp = document.getElementById('pm-scalapay-group');
   const wSp = document.getElementById('scalapay-checkout-widget');
   btnSp.style.display = 'none';
   wSp.style.visibility = 'hidden';
@@ -910,7 +917,7 @@ function showPaymentMethods() {
     window.scalapayConfig().then(cfg => {
       const ok = cfg.active && selected.date > formatDate(new Date());
       document.getElementById('pm-scalapay-amt').textContent = `${selected.prestation.prix} €`;
-      btnSp.style.display = ok ? 'flex' : 'none';
+      btnSp.style.display = ok ? 'block' : 'none';
       wSp.style.visibility = ok ? 'visible' : 'hidden';
     });
   }
