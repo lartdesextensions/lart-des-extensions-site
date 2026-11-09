@@ -4,7 +4,9 @@
 //
 // Ne touche JAMAIS :
 //   - un RDV confirmé ou annulé (seul le statut "en_attente" est concerné)
-//   - un RDV avec un paiement (acompte_paye, montant_paye ou payment_id)
+//   - un RDV payé (acompte_paye ou montant_paye). Un paiement CB ou Scalapay
+//     commencé puis abandonné laisse un payment_id sans paiement réel : ces
+//     réservations sont nettoyées, sinon elles bloqueraient le créneau.
 //   - une prestation dont une autre ligne du même RDV (groupe_id) est payée ou confirmée
 
 const { getDb } = require('./lib/turso');
@@ -13,7 +15,6 @@ const CONDITIONS = `
   statut = 'en_attente'
   AND COALESCE(acompte_paye, 0) = 0
   AND COALESCE(montant_paye, 0) = 0
-  AND (payment_id IS NULL OR payment_id = '')
   AND created_at IS NOT NULL
   AND created_at < datetime('now', '-24 hours')
   AND (
@@ -22,8 +23,7 @@ const CONDITIONS = `
       SELECT groupe_id FROM reservations
       WHERE groupe_id IS NOT NULL AND groupe_id != ''
         AND (statut = 'confirme' OR COALESCE(acompte_paye, 0) = 1
-             OR COALESCE(montant_paye, 0) > 0
-             OR (payment_id IS NOT NULL AND payment_id != ''))
+             OR COALESCE(montant_paye, 0) > 0)
     )
   )`;
 
