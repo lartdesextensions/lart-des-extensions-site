@@ -1676,7 +1676,8 @@ const UNIT_TARIFS = {
 
 // Ajoute les lignes « à l'unité » en tête de leur sous-catégorie (Nouvelle pose…)
 function ajouterLignesUnite(list) {
-  Object.entries(UNIT_TARIFS).forEach(([code, t]) => {
+  // (à l'envers pour garder l'ordre : classique puis injectée)
+  Object.entries(UNIT_TARIFS).reverse().forEach(([code, t]) => {
     if (list.some(p => p.unite === code)) return;
     const ligne = { nom: t.label, prix: t.prix, duree_min: 2, categorie: t.cat, sous_categorie: t.sous, actif: true, unite: code };
     const idx = list.findIndex(p => p.categorie === t.cat && p.sous_categorie === t.sous);
