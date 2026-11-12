@@ -190,6 +190,11 @@ tr:hover td{background:var(--cream);}
 .modal{background:var(--white);border-radius:14px;padding:28px;width:380px;max-width:95vw;max-height:none;margin:auto 0;}
 .modal-title{font-family:'Cormorant Garamond',serif;font-size:1.2rem;margin-bottom:16px;}
 .modal-actions{display:flex;gap:10px;margin-top:20px;}
+#modal-rdv .modal{position:relative;}
+#modal-rdv .modal-title{padding-right:44px;}
+.modal-x{position:absolute;top:14px;right:14px;width:40px;height:40px;border:none;border-radius:50%;background:var(--beige);color:var(--dark);font-size:1.3rem;line-height:1;cursor:pointer;}
+#modal-rdv .modal-actions{flex-wrap:wrap;}
+#modal-rdv .modal-actions .btn{flex:1 1 calc(50% - 5px);padding:11px 10px;}
 
 /* FICHE CLIENTE */
 #modal-client .modal{width:520px;}
@@ -773,23 +778,23 @@ tr:hover td{background:var(--cream);}
 
 <div class="modal-bg" id="modal-rdv">
   <div class="modal">
+    <button type="button" class="modal-x" onclick="closeModal()" aria-label="Fermer">✕</button>
     <div class="modal-title" id="modal-title">Détails du rendez-vous</div>
     <div id="modal-body"></div>
     <div class="modal-actions" id="modal-actions-main">
       <button class="btn" id="modal-confirm-btn" onclick="changeStatut('confirme')">✓ Confirmer</button>
       <button class="btn btn-outline" onclick="openEditRdvModal()">✏️ Modifier</button>
       <button class="btn btn-outline" id="modal-resend-btn" onclick="renvoyerConfirmation()">📧 Renvoyer la confirmation</button>
-      <button class="btn btn-danger" onclick="startCancelFlow()">✗ Annuler</button>
-      <button class="btn btn-outline" onclick="closeModal()">Fermer</button>
+      <button class="btn btn-outline" onclick="startCancelFlow(true)">🙅 Pas venue</button>
+      <button class="btn btn-danger" onclick="startCancelFlow(false)">✗ Annuler</button>
     </div>
     <div class="modal-actions" id="modal-actions-cancel" style="display:none;flex-wrap:wrap;">
-      <span style="font-size:.8rem;width:100%;color:var(--taupe-dark);">L'acompte a-t-il été remboursé à la cliente ?</span>
-      <button class="btn btn-danger" onclick="finalizeCancel(true)">Oui, remboursé</button>
-      <button class="btn btn-danger" onclick="finalizeCancel(false)">Non</button>
-      <button class="btn btn-outline" onclick="cancelCancelFlow()">Retour</button>
+      <span id="cancel-question" style="font-size:.8rem;width:100%;color:var(--taupe-dark);">L'acompte a-t-il été remboursé à la cliente ?</span>
+      <button class="btn btn-danger" id="cancel-yes" onclick="finalizeCancel(true)">Oui, remboursé</button>
+      <button class="btn btn-danger" id="cancel-no" onclick="finalizeCancel(false)">Non</button>
+      <button class="btn btn-outline" style="flex-basis:100%;" onclick="cancelCancelFlow()">Retour</button>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-outline" style="border-color:var(--error);color:var(--error);" onclick="deleteRdv()">🗑 Supprimer définitivement</button>
       <button class="btn btn-outline" onclick="blockCurrentClient()">🚫 Bloquer cette cliente</button>
     </div>
   </div>
@@ -1354,7 +1359,7 @@ async function loadDashboard() {
   const upcoming = rdvs.filter(r => r.date >= today).slice(0, 10);
   const tbody = document.getElementById('upcoming-list');
   if (upcoming.length === 0) { tbody.innerHTML = '<div style="padding:20px;color:var(--taupe);font-size:.85rem;text-align:center;">Aucun rendez-vous à venir.</div>'; return; }
-  tbody.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.82rem;"><thead style="background:var(--beige);"><tr><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Date</th><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Heure</th><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Cliente</th><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Prestation</th><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Statut</th></tr></thead><tbody>${upcoming.map(r => `<tr style="border-top:1px solid var(--beige);"><td style="padding:10px 14px;">${fmtDateFR(r.date)}</td><td style="padding:10px 14px;">${r.heure}</td><td style="padding:10px 14px;">${r.prenom} ${r.nom}</td><td style="padding:10px 14px;">${r.prestation_nom}</td><td style="padding:10px 14px;">${badgeHtml(r.statut)}</td></tr>`).join('')}</tbody></table>`;
+  tbody.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.82rem;"><thead style="background:var(--beige);"><tr><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Date</th><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Heure</th><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Cliente</th><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Prestation</th><th style="padding:10px 14px;text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);">Statut</th></tr></thead><tbody>${upcoming.map(r => `<tr style="border-top:1px solid var(--beige);"><td style="padding:10px 14px;">${fmtDateFR(r.date)}</td><td style="padding:10px 14px;">${r.heure}</td><td style="padding:10px 14px;">${r.prenom} ${r.nom}</td><td style="padding:10px 14px;">${r.prestation_nom}</td><td style="padding:10px 14px;">${badgeRdv(r)}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function startOfWeek(d) { const day = d.getDay(), diff = d.getDate() - day + (day === 0 ? -6 : 1); return new Date(d.setDate(diff)); }
@@ -2159,7 +2164,7 @@ async function loadAgenda() {
           <div style="font-weight:600;font-size:.9rem;">${r.prix} €</div>
           <div style="font-size:.75rem;color:var(--taupe-dark);">Réglé : ${encaisseEnLigne(r)} € · Reste : ${resteDu(r)} €</div>
         </div>
-        ${badgeHtml(r.statut)}
+        ${badgeRdv(r)}
       </div>`;
     }).join('');
   }
@@ -2331,11 +2336,15 @@ async function loadReservations() {
     <td>${fmtDateFR(r.date)}</td><td>${r.heure}</td>
     <td><strong>${r.prenom} ${r.nom}</strong><br><span style="font-size:.72rem;color:var(--taupe-dark);">${r.email}</span></td>
     <td>${r.prestation_nom}</td><td>${r.prix} €</td>
-    <td>${badgeHtml(r.statut)}</td>
+    <td>${badgeRdv(r)}</td>
     <td><button class="action-btn" onclick="openModal(rowAt(${regRow(r)}))">Voir</button></td>
   </tr>`).join('');
 }
 
+function badgeRdv(r) {
+  if (estPasVenue(r)) return '<span class="badge badge-cancel">Pas venue</span>';
+  return badgeHtml(r.statut);
+}
 function badgeHtml(s) {
   if (s === 'en_attente') return '<span class="badge badge-wait">En attente</span>';
   if (s === 'confirme') return '<span class="badge badge-ok">Confirmé</span>';
@@ -2391,7 +2400,7 @@ async function openModal(r) {
       <strong>Email :</strong> ${r.email || '—'}<br>
       <strong>Tél :</strong> ${r.telephone || '—'}<br>
       <strong>Message :</strong> ${r.message || '—'}<br>
-      <strong>Statut :</strong> ${badgeHtml(r.statut)}${remboursementLigne}
+      <strong>Statut :</strong> ${badgeRdv(r)}${remboursementLigne}
     </p>`;
   document.getElementById('modal-confirm-btn').style.display = r.statut === 'confirme' ? 'none' : 'block';
   document.getElementById('modal-actions-main').style.display = 'flex';
@@ -2548,7 +2557,19 @@ async function changeStatut(s) {
   refreshAllViews();
 }
 
-function startCancelFlow() {
+// « Pas venue » : même déroulé que l'annulation (le créneau est libéré),
+// mais le rendez-vous est marqué comme absence et c'est Jessie qui choisit
+// de rembourser ou de garder l'acompte.
+const MARQUE_PAS_VENUE = '[Pas venue]';
+let flowPasVenue = false;
+function estPasVenue(r) { return !!r && String(r.message || '').startsWith('[Pas venue]'); }
+function startCancelFlow(pasVenue) {
+  flowPasVenue = !!pasVenue;
+  document.getElementById('cancel-question').textContent = flowPasVenue
+    ? 'Cliente pas venue : rembourser l\'acompte ?'
+    : "L'acompte a-t-il été remboursé à la cliente ?";
+  document.getElementById('cancel-yes').textContent = flowPasVenue ? 'Oui, rembourser' : 'Oui, remboursé';
+  document.getElementById('cancel-no').textContent = flowPasVenue ? 'Non, je garde l\'acompte' : 'Non';
   document.getElementById('modal-actions-main').style.display = 'none';
   document.getElementById('modal-actions-cancel').style.display = 'flex';
 }
@@ -2581,8 +2602,12 @@ async function finalizeCancel(remboursed) {
     }
   }
 
+  const payloadAnnul = { statut: 'annule', acompte_rembourse: remboursed && autoRefundOutcome !== 'failed' };
+  if (flowPasVenue && !estPasVenue(currentRdv)) {
+    payloadAnnul.message = (MARQUE_PAS_VENUE + ' ' + String(currentRdv.message || '')).trim();
+  }
   await dbCall('reservations', 'update', {
-    payload: { statut: 'annule', acompte_rembourse: remboursed && autoRefundOutcome !== 'failed' },
+    payload: payloadAnnul,
     filters: [{ col: 'id', op: 'eq', value: currentRdv.id }]
   });
   // Les autres prestations du même RDV (même groupe_id) sont annulées aussi
