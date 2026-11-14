@@ -68,72 +68,58 @@ async function sendViaEmailJS(templateId, templateParams) {
 const SALON_NOM = "L'Art des Extensions";
 const SALON_TEL = '07 80 96 38 23';
 const SITE = 'https://lartdesextensions.fr';
+// Boîte qui reçoit les réservations (comme dans EmailJS)
+const EMAIL_SALON = process.env.EMAIL_SALON || 'rdv.lartdesextensions@gmail.com';
 
 function esc(v) {
   return String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function ligne(label, valeur) {
-  return `<tr><td style="padding:6px 0;color:#8A7560;font-size:13px;width:150px;vertical-align:top;">${esc(label)}</td>`
-       + `<td style="padding:6px 0;color:#1F1F1F;font-size:14px;font-weight:600;">${valeur}</td></tr>`;
+// Mise en page reprise à l'identique des modèles EmailJS (même style, même texte).
+function cadreEmailJS(contenu) {
+  return `<div style="font-family: system-ui, sans-serif, Arial; font-size: 12px;">
+<div style="margin-top: 20px; padding: 15px 0; border-width: 1px 0; border-style: dashed; border-color: lightgrey;">
+<table role="presentation"><tbody><tr><td style="vertical-align: top;">
+<div style="padding: 6px 10px; margin: 0 10px; background-color: aliceblue; border-radius: 5px; font-size: 26px; display: inline-block;" role="img">&#128100;</div>
+${contenu}
+</td></tr></tbody></table>
+</div>
+</div>`;
 }
 
-function gabarit(titre, intro, lignes, apres) {
-  return `<!DOCTYPE html><html lang="fr"><body style="margin:0;background:#FAF8F5;font-family:Helvetica,Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#FAF8F5;padding:24px 12px;"><tr><td align="center">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #DDD0C0;border-radius:12px;">
-<tr><td style="padding:26px 28px 6px;text-align:center;font-family:Georgia,serif;font-size:22px;color:#1F1F1F;letter-spacing:1px;">${SALON_NOM}</td></tr>
-<tr><td style="padding:0 28px;text-align:center;font-size:12px;color:#8A7560;letter-spacing:2px;text-transform:uppercase;">${esc(titre)}</td></tr>
-<tr><td style="padding:22px 28px 8px;font-size:14px;line-height:1.6;color:#1F1F1F;">${intro}</td></tr>
-<tr><td style="padding:4px 28px 8px;"><table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #F0EBE3;border-bottom:1px solid #F0EBE3;">${lignes.join('')}</table></td></tr>
-<tr><td style="padding:12px 28px 26px;font-size:13px;line-height:1.6;color:#6B5744;">${apres}</td></tr>
-</table>
-<p style="font-size:11px;color:#B59F88;margin:14px 0 0;">${SALON_NOM} · Orsay · ${SALON_TEL} · <a href="${SITE}" style="color:#B59F88;">lartdesextensions.fr</a></p>
-</td></tr></table></body></html>`;
-}
-
+// Copie du modèle EmailJS template_ki0fg15 (confirmation envoyée à la cliente)
 function emailCliente(p) {
-  const prestations = String(p.prestation).split(' + ').map(esc).join('<br>');
-  const html = gabarit(
-    'Confirmation de rendez-vous',
-    `Bonjour ${esc(String(p.nom_cliente).split(' ')[0])},<br><br>Votre rendez-vous est bien confirmé. Voici le récapitulatif :`,
-    [
-      ligne('Date', esc(p.date_rdv)),
-      ligne('Prestation(s)', prestations),
-      ligne('Total', esc(p.total) + ' €'),
-      ligne('Déjà réglé', esc(p.montant_paye) + ' €'),
-      ligne('Reste à régler', esc(p.reste) + ' €')
-    ],
-    `${esc(p.mention_solde)}<br><br>Le salon reçoit uniquement sur rendez-vous. Pour toute question ou modification, contactez-nous au ${SALON_TEL}.<br><br>À très bientôt,<br>Jessie`
-  );
-  return { subject: `Votre rendez-vous du ${p.date_rdv} est confirmé`, html };
+  const html = cadreEmailJS(`<p>Bonjour ${esc(p.nom_cliente)},</p>
+<p>✨ Votre rendez-vous est confirmé !</p>
+<p>💇 Prestation(s) : ${esc(p.prestation)}<br>📅 Date : ${esc(p.date_rdv)}<br>🕐 Heure : ${esc(p.heure_rdv)}</p>
+<p>💶 Montant total : ${esc(p.total)} €<br>✅ Déjà réglé en ligne : ${esc(p.montant_paye)} €<br>💰 Reste à payer sur place le jour du RDV : ${esc(p.reste)} €<br>💵 Paiement accepté : Espèces ou PayPal</p>
+<p>📍 Adresse du salon :<br>L'Art des Extensions<br>15 rue du Fond du Guichet<br>91400 Orsay</p>
+<p>🧴 La veille au soir ou le jour même, lavez vos cheveux deux fois avec un shampoing sans silicone et sans huiles. Il est important qu'ils ne soient pas gras pour la pose.</p>
+<p>⚠️ Évitez absolument les masques et après-shampoings. Séchez-les bien et lissez-les avant votre venue.</p>
+<p>🚆 Accès : RER B – Gare Le Guichet (10 min à pied)</p>
+<p>🚗 Parking : Au fond de l'impasse, 2e portillon noir à droite (pancarte indiquée)</p>
+<p>❌ Les accompagnateurs et enfants ne sont pas acceptés.</p>
+<p>🕐 Merci d'arriver à l'heure exacte de votre rendez-vous. Un retard de 15 minutes maximum est toléré. Au-delà, la prestation risque d'être annulée et l'acompte perdu.</p>
+<p>&nbsp;</p>
+<p>À très bientôt !<br>L'Art des Extensions</p>`);
+  return { subject: "Confirmation de votre réservation - L'Art des Extensions", html };
 }
 
+// Copie du modèle EmailJS template_bae1d9m (notification « Nouvelle réservation » pour le salon)
 function emailSalon(p) {
-  const prestations = String(p.prestation).split(' + ').map(esc).join('<br>');
-  const html = gabarit(
-    'Nouvelle réservation',
-    `Nouvelle réservation en ligne de <strong>${esc(p.nom_cliente)}</strong>.`,
-    [
-      ligne('Date', esc(p.date_rdv)),
-      ligne('Prestation(s)', prestations),
-      ligne('Total', esc(p.total) + ' €'),
-      ligne('Payé en ligne', `${esc(p.montant_paye)} € (${esc(p.type_paiement)})`),
-      ligne('Reste au salon', esc(p.reste) + ' €'),
-      ligne('Téléphone', esc(p.telephone_cliente || '—')),
-      ligne('Email', esc(p.email_cliente || '—'))
-    ],
-    ''
-  );
-  return { subject: `Nouveau RDV : ${p.nom_cliente} — ${p.date_rdv}`, html };
+  const html = cadreEmailJS(`<p>Nouvelle réservation reçue !</p>
+<p>Cliente : ${esc(p.nom_cliente)}<br>Email : ${esc(p.email_cliente)}<br>Prestation(s) : ${esc(p.prestation)}<br>Total : ${esc(p.total)} €<br>Payé en ligne : ${esc(p.montant_paye)} € (${esc(p.type_paiement)})
+Reste à encaisser : ${esc(p.reste)} €
+<br>Téléphone : ${esc(p.telephone_cliente)}<br>Date du RDV : ${esc(p.date_rdv)}<br>Heure du RDV : ${esc(p.heure_rdv)}</p>`);
+  return { subject: `Nouvelle réservation - ${p.prestation}`, html };
 }
 
-async function sendViaBrevo(to, toName, contenu, replyTo) {
+async function sendViaBrevo(to, toName, contenu, replyTo, senderName) {
   try {
     const from = process.env.EMAIL_FROM || 'contact@lartdesextensions.fr';
     const body = {
-      sender: { name: SALON_NOM, email: from },
+      sender: { name: senderName || SALON_NOM, email: from },
       to: [{ email: to, name: toName || undefined }],
       subject: contenu.subject,
       htmlContent: contenu.html
@@ -160,7 +146,8 @@ async function sendViaBrevo(to, toName, contenu, replyTo) {
 async function sendConfirmationEmail(r) {
   const p = buildTemplateParams(r);
   if (process.env.BREVO_API_KEY) {
-    const res = await sendViaBrevo(process.env.EMAIL_SALON || 'lartdesextensions@gmail.com', SALON_NOM, emailSalon(p), r.email || null);
+    // Même destinataire que le modèle EmailJS ; expéditeur affiché = nom de la cliente
+    const res = await sendViaBrevo(EMAIL_SALON, SALON_NOM, emailSalon(p), r.email || null, p.nom_cliente);
     if (res.ok) return res;
     console.error('Brevo en échec, envoi de secours par EmailJS');
   }
@@ -171,7 +158,7 @@ async function sendConfirmationEmail(r) {
 async function sendClientConfirmationEmail(r) {
   const p = buildTemplateParams(r);
   if (process.env.BREVO_API_KEY && r.email) {
-    const res = await sendViaBrevo(r.email, `${r.prenom} ${r.nom}`, emailCliente(p), process.env.EMAIL_SALON || 'lartdesextensions@gmail.com');
+    const res = await sendViaBrevo(r.email, `${r.prenom} ${r.nom}`, emailCliente(p), EMAIL_SALON);
     if (res.ok) return res;
     console.error('Brevo en échec, envoi de secours par EmailJS');
   }
@@ -194,13 +181,14 @@ async function sendListeAttenteEmail(e, jours) {
   const lignesTxt = jours.map(j => `${libelleDate(j.date)} : ${j.heures.slice(0, 6).join(', ')}`);
   const lien = `${SITE}/prestations.html`;
   if (process.env.BREVO_API_KEY) {
-    const html = gabarit(
-      'Un créneau s\'est libéré',
-      `Bonjour ${esc(e.prenom)},<br><br>Bonne nouvelle : de la place s'est libérée pour <strong>${esc(e.prestation_nom || 'votre prestation')}</strong>.`,
-      jours.map(j => ligne(libelleDate(j.date), esc(j.heures.slice(0, 6).join(', ')))),
-      `Les créneaux partent vite : réservez dès maintenant sur <a href="${lien}" style="color:#8A7560;">lartdesextensions.fr</a>.<br><br>À très bientôt,<br>Jessie`
-    );
-    const res = await sendViaBrevo(e.email, `${e.prenom} ${e.nom || ''}`.trim(), { subject: 'Un créneau s\'est libéré chez L\'Art des Extensions', html }, process.env.EMAIL_SALON || 'lartdesextensions@gmail.com');
+    const html = cadreEmailJS(`<p>Bonjour ${esc(e.prenom)},</p>
+<p>✨ Bonne nouvelle : une place s'est libérée !</p>
+<p>💇 Prestation(s) : ${esc(e.prestation_nom || '')}</p>
+<p>📅 Disponibilités :<br>${jours.map(j => esc(libelleDate(j.date)) + ' : ' + esc(j.heures.slice(0, 6).join(', '))).join('<br>')}</p>
+<p>👉 Réservez vite sur <a href="${lien}">lartdesextensions.fr</a>, les créneaux partent rapidement.</p>
+<p>&nbsp;</p>
+<p>À très bientôt !<br>L'Art des Extensions</p>`);
+    const res = await sendViaBrevo(e.email, `${e.prenom} ${e.nom || ''}`.trim(), { subject: "Une place s'est libérée - L'Art des Extensions", html }, EMAIL_SALON);
     if (res.ok) return res;
   }
   if (process.env.EMAILJS_TEMPLATE_ATTENTE) {
