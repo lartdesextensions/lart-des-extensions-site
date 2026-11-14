@@ -74,6 +74,12 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
 
 /* TIME SLOTS */
 .slots-wrap{margin-top:24px;}
+.wl-box{margin-top:22px;border:1px solid var(--beige-mid);border-radius:12px;padding:14px 16px;background:#fff;}
+.wl-box.full{border-color:var(--dark,#1F1F1F);background:var(--cream,#FAF8F5);}
+.wl-head{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;font-size:.85rem;color:var(--taupe-dark,#6B5744);}
+.wl-toggle{background:none;border:none;padding:0;font:inherit;font-size:.85rem;color:var(--dark,#1F1F1F);text-decoration:underline;cursor:pointer;}
+.wl-txt{font-size:.82rem;line-height:1.5;color:var(--taupe-dark,#6B5744);margin:12px 0 14px;}
+.wl-msg{font-size:.82rem;margin-top:10px;}
 .slots-title{font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:12px;}
 .slots-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
 @media(max-width:400px){.slots-grid{grid-template-columns:repeat(3,1fr);}}
@@ -200,6 +206,25 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
       <div class="slots-title">Créneaux disponibles</div>
       <div id="slots-grid"></div>
     </div>
+    <!-- LISTE D'ATTENTE -->
+    <div class="wl-box" id="wl-box">
+      <div class="wl-head" id="wl-head"><span id="wl-titre">Aucun créneau ne vous convient ?</span>
+        <button type="button" class="wl-toggle" id="wl-toggle" onclick="toggleListeAttente()">Être prévenue si une place se libère</button></div>
+      <div id="wl-form" style="display:none;">
+        <p class="wl-txt">Laissez vos coordonnées : si un jour se libère pour <strong id="wl-prest">votre prestation</strong> (annulation, nouvelle ouverture), vous recevez un email tout de suite.</p>
+        <div class="form-row">
+          <div class="field"><label>Prénom *</label><input type="text" id="wl-prenom" maxlength="60"></div>
+          <div class="field"><label>Nom</label><input type="text" id="wl-nom" maxlength="60"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label>Email *</label><input type="email" id="wl-email" maxlength="120"></div>
+          <div class="field"><label>Téléphone *</label><input type="tel" id="wl-tel" maxlength="30"></div>
+        </div>
+        <button type="button" class="btn" id="wl-btn" onclick="inscrireListeAttente()">M'inscrire sur la liste d'attente</button>
+        <div id="wl-msg" class="wl-msg"></div>
+      </div>
+    </div>
+
     <div class="btn-row" style="margin-top:20px;">
       <button class="btn btn-outline" onclick="window.location.href='prestations.html'">← Retour aux prestations</button>
       <button class="btn" id="btn-next1" disabled onclick="goStep(2)">Continuer →</button>
@@ -518,6 +543,7 @@ async function renderCalendar() {
   const daysInMonth = new Date(y, mo + 1, 0).getDate();
   const todayStr = formatDate(new Date());
   const duree = selected.prestation ? selected.prestation.duree_min : 60;
+  let aucunLibre = true;
 
   for (let i = 0; i < adjust; i++) {
     const e = document.createElement('div');
@@ -547,7 +573,7 @@ async function renderCalendar() {
     let clickable = false;
     if (isPast) cls += ' past';
     else if (isClosed || isFull) cls += ' closed';
-    else { cls += ' available'; clickable = true; }
+    else { cls += ' available'; clickable = true; aucunLibre = false; }
     if (dateStr === selected.date) cls += ' selected';
     if (dateStr === todayStr) cls += ' today';
 
@@ -559,6 +585,7 @@ async function renderCalendar() {
     frag.appendChild(el);
   }
   grid.replaceChildren(frag);
+  majListeAttente(aucunLibre);
 }
 
 // Charge en une seule fois les réservations + blocages horaires de tout le mois affiché,
@@ -750,6 +777,47 @@ async function renderSlots(dateStr, avail) {
     gridOthers.className = 'slots-grid';
     others.forEach(s => gridOthers.appendChild(buildSlotEl(s)));
     grid.appendChild(gridOthers);
+  }
+}
+
+// ── LISTE D'ATTENTE ──
+function toggleListeAttente(forcer) {
+  const f = document.getElementById('wl-form');
+  const ouvrir = forcer === true ? true : f.style.display === 'none';
+  f.style.display = ouvrir ? 'block' : 'none';
+  if (ouvrir && selected.prestation) document.getElementById('wl-prest').textContent = selected.prestation.nom;
+}
+// Mois affiché sans aucun jour disponible : on met la liste d'attente en avant
+function majListeAttente(aucunJourLibre) {
+  const box = document.getElementById('wl-box');
+  if (!box || box.dataset.ok) return;
+  box.classList.toggle('full', !!aucunJourLibre);
+  document.getElementById('wl-titre').textContent = aucunJourLibre
+    ? 'Plus aucune place ce mois-ci pour cette prestation.'
+    : 'Aucun créneau ne vous convient ?';
+}
+async function inscrireListeAttente() {
+  const msg = document.getElementById('wl-msg');
+  const v = id => document.getElementById(id).value.trim();
+  const data = { prenom: v('wl-prenom'), nom: v('wl-nom'), email: v('wl-email'), telephone: v('wl-tel') };
+  if (!data.prenom || !data.email || !data.telephone) {
+    msg.style.color = 'var(--error)'; msg.textContent = 'Merci de remplir prénom, email et téléphone.'; return;
+  }
+  if (!selected.prestation) { msg.style.color = 'var(--error)'; msg.textContent = 'Choisissez d\'abord une prestation.'; return; }
+  const btn = document.getElementById('wl-btn');
+  btn.disabled = true; msg.style.color = ''; msg.textContent = 'Inscription...';
+  try {
+    const res = await fetch('/.netlify/functions/liste-attente', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign(data, { prestation_nom: selected.prestation.nom, duree_min: selected.prestation.duree_min }))
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Erreur');
+    const box = document.getElementById('wl-box');
+    box.dataset.ok = '1';
+    box.innerHTML = '<div class="wl-txt" style="margin:0;">✓ C\'est noté ' + data.prenom.replace(/[<>&]/g, '') + ' ! Vous recevrez un email dès qu\'une place se libère pour cette prestation.</div>';
+  } catch (e) {
+    btn.disabled = false; msg.style.color = 'var(--error)'; msg.textContent = e.message;
   }
 }
 
