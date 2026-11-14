@@ -282,6 +282,7 @@ tr:hover td{background:var(--cream);}
     <div class="nav-item" onclick="showSection('prestations')">✂️ Prestations</div>
     <div class="nav-item" onclick="showSection('produits')">🧴 Produits</div>
     <div class="nav-item" onclick="showSection('clients')">👤 Clients</div>
+    <div class="nav-item" onclick="showSection('attente')">⏳ Liste d'attente <span id="attente-badge" style="display:none;background:var(--error);color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:4px;"></span></div>
     <div class="nav-item" onclick="showSection('bloques')">🚫 Clients bloqués</div>
     <div class="nav-item" onclick="showSection('parametres')">⚙️ Paramètres</div>
   </div>
@@ -576,6 +577,18 @@ tr:hover td{background:var(--cream);}
     </div>
 
     <!-- CLIENTS BLOQUES -->
+    <div class="section" id="sec-attente">
+      <div class="content-title">Liste d'attente</div>
+      <div class="content-sub">Clientes qui veulent être prévenues si une place se libère pour leur prestation. Le site vérifie toutes les 15 minutes et leur envoie un email automatiquement.</div>
+      <div id="attente-info" style="display:none;font-size:.8rem;background:#FFF8E1;border-radius:8px;padding:10px 14px;margin-bottom:14px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Cliente</th><th>Prestation</th><th>Inscrite le</th><th>Statut</th><th>Actions</th></tr></thead>
+          <tbody id="attente-tbody"><tr><td colspan="5" style="text-align:center;color:var(--taupe);padding:24px;">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="section" id="sec-bloques">
       <div class="content-title">Clients bloqués</div>
       <div class="content-sub">Ces clientes ne peuvent plus réserver en ligne (elles peuvent toujours être appelées/reçues au salon)</div>
@@ -963,6 +976,7 @@ function showSection(id) {
   if (id === 'produits') { loadProduits(); loadVentesRecentes(); }
   if (id === 'clients') loadClients();
   if (id === 'bloques') loadBloques();
+  if (id === 'attente') loadAttente();
   if (id === 'disponibilites') { renderAdminCal(); loadWeeklyHours(); loadBlocages(); }
 }
 
@@ -1118,6 +1132,7 @@ async function initApp() {
   adminMonth = now.getMonth();
   await chargerCoutsPerso();
   await chargerBudget();
+  dbCall('liste_attente', 'select').then(r => majBadgeAttente(r.data)).catch(() => {});
   await loadDashboard();
   renderAdminCal();
   rafraichirCloche(true);
@@ -2650,6 +2665,75 @@ function refreshAllViews() {
   loadReservations();
   loadDashboard();
   if (document.getElementById('agenda-date')) loadAgenda();
+}
+
+// ── LISTE D'ATTENTE ──
+const ATTENTE_STATUTS = {
+  en_attente: ['⏳ En attente', 'var(--taupe-dark)'],
+  a_prevenir: ['📞 À prévenir (email non parti)', 'var(--error)'],
+  prevenue: ['✅ Prévenue par email', 'var(--success)'],
+  traitee: ['✔︎ Traitée', 'var(--taupe)'],
+  expiree: ['Expirée (90 jours)', 'var(--taupe)']
+};
+function escA(v) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function majBadgeAttente(rows) {
+  const n = (rows || []).filter(r => r.statut === 'a_prevenir').length;
+  const b = document.getElementById('attente-badge');
+  if (b) { b.textContent = n; b.style.display = n ? 'inline' : 'none'; }
+}
+async function loadAttente() {
+  const tbody = document.getElementById('attente-tbody');
+  let data;
+  try {
+    ({ data } = await dbCall('liste_attente', 'select', { order: [{ col: 'created_at', ascending: false }] }));
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--error);">Erreur : ${escA(e.message)}</td></tr>`;
+    return;
+  }
+  majBadgeAttente(data);
+  const info = document.getElementById('attente-info');
+  const aPrev = (data || []).filter(r => r.statut === 'a_prevenir').length;
+  info.style.display = aPrev ? 'block' : 'none';
+  info.textContent = aPrev ? `${aPrev} cliente(s) à prévenir toi-même : une place s'est libérée mais l'email automatique n'a pas pu partir.` : '';
+  if (!data || !data.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--taupe);">Personne sur la liste d\'attente pour le moment.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(r => {
+    const st = ATTENTE_STATUTS[r.statut] || [r.statut, 'var(--taupe)'];
+    let trouves = '';
+    try {
+      const t = JSON.parse(r.creneaux_trouves || '[]');
+      if (t.length) trouves = '<div style="font-size:.72rem;color:var(--taupe-dark);margin-top:3px;">Libéré : ' + t.map(j => `${j.date.split('-').reverse().slice(0,2).join('/')} (${(j.heures||[]).slice(0,3).join(', ')}${(j.heures||[]).length > 3 ? '…' : ''})`).map(escA).join(' · ') + '</div>';
+    } catch (e) {}
+    const tel = String(r.telephone || '').replace(/\s/g, '');
+    const dateInsc = r.created_at ? new Date(String(r.created_at).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR') : '—';
+    return `<tr>
+      <td><strong>${escA(r.prenom)} ${escA(r.nom || '')}</strong><div style="font-size:.75rem;color:var(--taupe-dark);">${escA(r.telephone || '')}<br>${escA(r.email)}</div></td>
+      <td>${escA(r.prestation_nom || '—')}<div style="font-size:.72rem;color:var(--taupe);">${escA(r.duree_min)} min</div></td>
+      <td>${dateInsc}</td>
+      <td><span style="color:${st[1]};font-weight:500;">${st[0]}</span>${trouves}</td>
+      <td style="white-space:nowrap;">
+        ${tel ? `<a class="action-btn" href="tel:${escA(tel)}">📞</a> <a class="action-btn" href="sms:${escA(tel)}">💬</a>` : ''}
+        <a class="action-btn" href="mailto:${escA(r.email)}">✉️</a>
+        ${r.statut === 'en_attente' ? '' : `<button class="action-btn" onclick="setAttenteStatut(${Number(r.id)}, 'en_attente')" title="La remettre en attente : elle sera re-prévenue si une autre place se libère">↺</button>`}
+        ${r.statut !== 'traitee' ? `<button class="action-btn" onclick="setAttenteStatut(${Number(r.id)}, 'traitee')" title="Marquer comme traitée">✔︎</button>` : ''}
+        <button class="action-btn" onclick="deleteAttente(${Number(r.id)})" title="Retirer de la liste">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+async function setAttenteStatut(id, statut) {
+  const payload = { statut };
+  // Remise en attente : on repart de la situation actuelle du planning
+  if (statut === 'en_attente') payload.creneaux_init = null;
+  await dbCall('liste_attente', 'update', { payload, filters: [{ col: 'id', op: 'eq', value: id }] });
+  loadAttente();
+}
+async function deleteAttente(id) {
+  if (!confirm('Retirer cette cliente de la liste d\'attente ?')) return;
+  await dbCall('liste_attente', 'delete', { filters: [{ col: 'id', op: 'eq', value: id }] });
+  loadAttente();
 }
 
 // ── CLIENTS BLOQUES ──
