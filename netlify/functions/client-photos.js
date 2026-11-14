@@ -6,8 +6,11 @@ const { isAdmin } = require('./lib/auth');
 
 const MAX_OCTETS = 4 * 1024 * 1024; // 4 Mo par photo (déjà compressée côté navigateur)
 
+// Pas de consistency 'strong' : en mode fonction classique (Lambda), Netlify
+// ne fournit pas l'adresse nécessaire (uncachedEdgeURL) et chaque appel
+// échouait avec « BlobsConsistencyError ». La lecture par défaut suffit.
 function store() {
-  return getStore({ name: 'photos-clientes', consistency: 'strong' });
+  return getStore({ name: 'photos-clientes' });
 }
 async function readMeta(s, clientId) {
   const m = await s.get('meta/' + clientId, { type: 'json' });
