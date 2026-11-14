@@ -10,3 +10,8 @@
 [functions."nettoyage-reservations"]
   schedule = "@hourly"
   external_node_modules = ["@libsql/client"]
+
+# Liste d'attente : prévient les clientes quand un créneau se libère
+[functions."liste-attente-verif"]
+  schedule = "*/15 * * * *"
+  external_node_modules = ["@libsql/client"]
