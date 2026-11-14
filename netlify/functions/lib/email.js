@@ -146,8 +146,8 @@ async function sendViaBrevo(to, toName, contenu, replyTo, senderName) {
 async function sendConfirmationEmail(r) {
   const p = buildTemplateParams(r);
   if (process.env.BREVO_API_KEY) {
-    // Même destinataire que le modèle EmailJS ; expéditeur affiché = nom de la cliente
-    const res = await sendViaBrevo(EMAIL_SALON, SALON_NOM, emailSalon(p), r.email || null, p.nom_cliente);
+    // Même destinataire que le modèle EmailJS ; expéditeur affiché = le salon
+    const res = await sendViaBrevo(EMAIL_SALON, SALON_NOM, emailSalon(p), r.email || null);
     if (res.ok) return res;
     console.error('Brevo en échec, envoi de secours par EmailJS');
   }
