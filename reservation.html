@@ -74,12 +74,17 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
 
 /* TIME SLOTS */
 .slots-wrap{margin-top:24px;}
-.wl-box{margin-top:22px;border:1px solid var(--beige-mid);border-radius:12px;padding:14px 16px;background:#fff;}
-.wl-box.full{border-color:var(--dark,#1F1F1F);background:var(--cream,#FAF8F5);}
-.wl-head{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;font-size:.85rem;color:var(--taupe-dark,#6B5744);}
-.wl-toggle{background:none;border:none;padding:0;font:inherit;font-size:.85rem;color:var(--dark,#1F1F1F);text-decoration:underline;cursor:pointer;}
-.wl-txt{font-size:.82rem;line-height:1.5;color:var(--taupe-dark,#6B5744);margin:12px 0 14px;}
-.wl-msg{font-size:.82rem;margin-top:10px;}
+.wl-box{margin-top:22px;border-radius:14px;padding:18px 18px;background:var(--dark,#1F1F1F);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.18);}
+.wl-box.full{animation:wlPulse 2.2s ease-in-out infinite;}
+@keyframes wlPulse{0%,100%{box-shadow:0 6px 18px rgba(0,0,0,.18);}50%{box-shadow:0 6px 26px rgba(0,0,0,.38);}}
+.wl-head{display:flex;flex-direction:column;gap:12px;align-items:stretch;text-align:center;font-size:.88rem;color:#fff;}
+.wl-head #wl-titre{opacity:.85;}
+.wl-toggle{background:#fff;color:var(--dark,#1F1F1F);border:none;border-radius:10px;padding:13px 16px;font:inherit;font-size:.95rem;font-weight:700;cursor:pointer;letter-spacing:.02em;}
+.wl-toggle:hover{transform:translateY(-1px);}
+.wl-txt{font-size:.84rem;line-height:1.5;color:#fff;opacity:.9;margin:14px 0;}
+.wl-box label{color:#fff;}
+.wl-box .btn{background:#fff;color:var(--dark,#1F1F1F);font-weight:700;}
+.wl-msg{font-size:.82rem;margin-top:10px;color:#fff;}
 .slots-title{font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:12px;}
 .slots-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
 @media(max-width:400px){.slots-grid{grid-template-columns:repeat(3,1fr);}}
@@ -209,7 +214,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
     <!-- LISTE D'ATTENTE -->
     <div class="wl-box" id="wl-box">
       <div class="wl-head" id="wl-head"><span id="wl-titre">Aucun créneau ne vous convient ?</span>
-        <button type="button" class="wl-toggle" id="wl-toggle" onclick="toggleListeAttente()">Être prévenue si une place se libère</button></div>
+        <button type="button" class="wl-toggle" id="wl-toggle" onclick="toggleListeAttente()">🔔 Être prévenue si une place se libère</button></div>
       <div id="wl-form" style="display:none;">
         <p class="wl-txt">Laissez vos coordonnées : si un jour se libère pour <strong id="wl-prest">votre prestation</strong> (annulation, nouvelle ouverture), vous recevez un email tout de suite.</p>
         <div class="form-row">
@@ -801,7 +806,7 @@ async function inscrireListeAttente() {
   const v = id => document.getElementById(id).value.trim();
   const data = { prenom: v('wl-prenom'), nom: v('wl-nom'), email: v('wl-email'), telephone: v('wl-tel') };
   if (!data.prenom || !data.email || !data.telephone) {
-    msg.style.color = 'var(--error)'; msg.textContent = 'Merci de remplir prénom, email et téléphone.'; return;
+    msg.style.color = '#FFB4B4'; msg.textContent = 'Merci de remplir prénom, email et téléphone.'; return;
   }
   if (!selected.prestation) { msg.style.color = 'var(--error)'; msg.textContent = 'Choisissez d\'abord une prestation.'; return; }
   const btn = document.getElementById('wl-btn');
@@ -815,9 +820,9 @@ async function inscrireListeAttente() {
     if (!res.ok) throw new Error(json.error || 'Erreur');
     const box = document.getElementById('wl-box');
     box.dataset.ok = '1';
-    box.innerHTML = '<div class="wl-txt" style="margin:0;">✓ C\'est noté ' + data.prenom.replace(/[<>&]/g, '') + ' ! Vous recevrez un email dès qu\'une place se libère pour cette prestation.</div>';
+    box.innerHTML = '<div class="wl-txt" style="margin:0;text-align:center;font-weight:600;">🔔 C\'est noté ' + data.prenom.replace(/[<>&]/g, '') + ' ! Vous recevrez un email dès qu\'une place se libère pour cette prestation.</div>';
   } catch (e) {
-    btn.disabled = false; msg.style.color = 'var(--error)'; msg.textContent = e.message;
+    btn.disabled = false; msg.style.color = '#FFB4B4'; msg.textContent = e.message;
   }
 }
 
