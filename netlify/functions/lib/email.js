@@ -178,4 +178,43 @@ async function sendClientConfirmationEmail(r) {
   return sendViaEmailJS('template_ki0fg15', p);
 }
 
-module.exports = { sendConfirmationEmail, sendClientConfirmationEmail };
+// ── LISTE D'ATTENTE : un créneau s'est libéré ──
+// Envoi par Brevo si BREVO_API_KEY existe, sinon par le modèle EmailJS indiqué
+// dans la variable Netlify EMAILJS_TEMPLATE_ATTENTE. Sans aucun des deux, rien
+// n'est envoyé : la cliente apparaît « à prévenir » dans l'admin.
+function libelleDate(dateStr) {
+  const JOURS = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return `${JOURS[dow]} ${d} ${MONTHS_FR[m - 1]}`;
+}
+
+async function sendListeAttenteEmail(e, jours) {
+  // jours : [{ date: 'AAAA-MM-JJ', heures: ['10:00', ...] }]
+  const lignesTxt = jours.map(j => `${libelleDate(j.date)} : ${j.heures.slice(0, 6).join(', ')}`);
+  const lien = `${SITE}/prestations.html`;
+  if (process.env.BREVO_API_KEY) {
+    const html = gabarit(
+      'Un créneau s\'est libéré',
+      `Bonjour ${esc(e.prenom)},<br><br>Bonne nouvelle : de la place s'est libérée pour <strong>${esc(e.prestation_nom || 'votre prestation')}</strong>.`,
+      jours.map(j => ligne(libelleDate(j.date), esc(j.heures.slice(0, 6).join(', ')))),
+      `Les créneaux partent vite : réservez dès maintenant sur <a href="${lien}" style="color:#8A7560;">lartdesextensions.fr</a>.<br><br>À très bientôt,<br>Jessie`
+    );
+    const res = await sendViaBrevo(e.email, `${e.prenom} ${e.nom || ''}`.trim(), { subject: 'Un créneau s\'est libéré chez L\'Art des Extensions', html }, process.env.EMAIL_SALON || 'lartdesextensions@gmail.com');
+    if (res.ok) return res;
+  }
+  if (process.env.EMAILJS_TEMPLATE_ATTENTE) {
+    return sendViaEmailJS(process.env.EMAILJS_TEMPLATE_ATTENTE, {
+      name: `${e.prenom} ${e.nom || ''}`.trim(),
+      prenom: e.prenom,
+      email_cliente: e.email,
+      to_email: e.email,
+      prestation: e.prestation_nom || '',
+      creneaux: lignesTxt.join('\n'),
+      lien_reservation: lien
+    });
+  }
+  return { ok: false, error: 'Aucun envoi configuré' };
+}
+
+module.exports = { sendConfirmationEmail, sendClientConfirmationEmail, sendListeAttenteEmail };
