@@ -1,3 +1,5 @@
+const { jetonStop } = require('./creneaux');
+
 const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
 function buildTemplateParams(r) {
@@ -180,6 +182,7 @@ async function sendListeAttenteEmail(e, jours) {
   // jours : [{ date: 'AAAA-MM-JJ', heures: ['10:00', ...] }]
   const lignesTxt = jours.map(j => `${libelleDate(j.date)} : ${j.heures.slice(0, 6).join(', ')}`);
   const lien = `${SITE}/prestations.html`;
+  const lienStop = `${SITE}/.netlify/functions/liste-attente?stop=${encodeURIComponent(e.id)}&t=${jetonStop(e.id, e.email)}`;
   if (process.env.BREVO_API_KEY) {
     const html = cadreEmailJS(`<p>Bonjour ${esc(e.prenom)},</p>
 <p>✨ Bonne nouvelle : une place s'est libérée !</p>
@@ -187,7 +190,8 @@ async function sendListeAttenteEmail(e, jours) {
 <p>📅 Disponibilités :<br>${jours.map(j => esc(libelleDate(j.date)) + ' : ' + esc(j.heures.slice(0, 6).join(', '))).join('<br>')}</p>
 <p>👉 Réservez vite sur <a href="${lien}">lartdesextensions.fr</a>, les créneaux partent rapidement.</p>
 <p>&nbsp;</p>
-<p>À très bientôt !<br>L'Art des Extensions</p>`);
+<p>À très bientôt !<br>L'Art des Extensions</p>
+<p style="font-size: 11px; color: #888;">Vous recevez cet email car vous êtes inscrite sur notre liste d'attente. <a href="${lienStop}" style="color: #888;">Ne plus recevoir ces alertes</a></p>`);
     const res = await sendViaBrevo(e.email, `${e.prenom} ${e.nom || ''}`.trim(), { subject: "Une place s'est libérée - L'Art des Extensions", html }, EMAIL_SALON);
     if (res.ok) return res;
   }

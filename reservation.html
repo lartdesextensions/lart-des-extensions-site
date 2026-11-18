@@ -85,6 +85,19 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
 .wl-box label{color:#fff;}
 .wl-box .btn{background:#fff;color:var(--dark,#1F1F1F);font-weight:700;}
 .wl-msg{font-size:.82rem;margin-top:10px;color:#fff;}
+.wl-cal{background:rgba(255,255,255,.08);border-radius:12px;padding:12px;margin-bottom:12px;}
+.wl-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:600;font-size:.9rem;}
+.wl-cal-head button{background:none;border:1px solid rgba(255,255,255,.45);color:#fff;border-radius:6px;width:36px;height:36px;font-size:1rem;cursor:pointer;}
+.wl-cal-head button:disabled{opacity:.3;cursor:default;}
+.wl-cal .cal-grid{gap:3px;}
+.wl-cal .cal-day-name{color:#fff;opacity:.65;}
+.wl-jour{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:8px;font:inherit;font-size:.84rem;background:none;border:1px solid transparent;color:#fff;padding:0;}
+.wl-jour:disabled{opacity:.28;}
+.wl-jour.dispo{border-color:rgba(255,255,255,.6);font-weight:600;cursor:pointer;}
+.wl-jour.choisi{background:#fff;color:var(--dark,#1F1F1F);border-color:#fff;}
+.wl-cal-info{font-size:.78rem;opacity:.85;margin-top:8px;text-align:center;min-height:1.2em;}
+.wl-tout{display:flex;align-items:center;gap:10px;font-size:.84rem;margin-bottom:14px;cursor:pointer;color:#fff;}
+.wl-tout input{width:20px;height:20px;flex:none;accent-color:#fff;}
 .slots-title{font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:12px;}
 .slots-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
 @media(max-width:400px){.slots-grid{grid-template-columns:repeat(3,1fr);}}
@@ -216,7 +229,17 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
       <div class="wl-head" id="wl-head"><span id="wl-titre">Aucun créneau ne vous convient ?</span>
         <button type="button" class="wl-toggle" id="wl-toggle" onclick="toggleListeAttente()">🔔 Être prévenue si une place se libère</button></div>
       <div id="wl-form" style="display:none;">
-        <p class="wl-txt">Laissez vos coordonnées : si un jour se libère pour <strong id="wl-prest">votre prestation</strong> (annulation, nouvelle ouverture), vous recevez un email tout de suite.</p>
+        <p class="wl-txt">Choisissez les dates qui vous intéressent pour <strong id="wl-prest">votre prestation</strong>. Vous recevez un email dès qu'une place s'y libère.</p>
+        <div class="wl-cal" id="wl-cal">
+          <div class="wl-cal-head">
+            <button type="button" id="wl-prev" onclick="wlChangerMois(-1)" aria-label="Mois précédent">‹</button>
+            <span id="wl-cal-titre"></span>
+            <button type="button" id="wl-next" onclick="wlChangerMois(1)" aria-label="Mois suivant">›</button>
+          </div>
+          <div class="cal-grid" id="wl-cal-grid"></div>
+          <div class="wl-cal-info" id="wl-cal-info" aria-live="polite"></div>
+        </div>
+        <label class="wl-tout"><input type="checkbox" id="wl-tout" onchange="wlMajTout()"> Peu importe la date</label>
         <div class="form-row">
           <div class="field"><label>Prénom *</label><input type="text" id="wl-prenom" maxlength="60"></div>
           <div class="field"><label>Nom</label><input type="text" id="wl-nom" maxlength="60"></div>
@@ -791,6 +814,107 @@ function toggleListeAttente(forcer) {
   const ouvrir = forcer === true ? true : f.style.display === 'none';
   f.style.display = ouvrir ? 'block' : 'none';
   if (ouvrir && selected.prestation) document.getElementById('wl-prest').textContent = selected.prestation.nom;
+  if (ouvrir) { wlMois = { y: calYear, m: calMonth }; wlAfficherCalendrier(); }
+}
+
+// Calendrier de la liste d'attente : seuls les jours complets se choisissent
+// (les autres se réservent directement). Plusieurs dates possibles.
+const WL_MAX_DATES = 15, WL_FENETRE_JOURS = 90;
+const wlDates = new Set();
+let wlMois = null, wlToken = 0;
+
+function wlDateMax() {
+  const d = new Date();
+  d.setDate(d.getDate() + WL_FENETRE_JOURS);
+  return d;
+}
+function wlChangerMois(sens) {
+  const d = new Date(wlMois.y, wlMois.m + sens, 1);
+  wlMois = { y: d.getFullYear(), m: d.getMonth() };
+  wlAfficherCalendrier();
+}
+function wlMajInfo(texte) {
+  const n = wlDates.size;
+  document.getElementById('wl-cal-info').textContent = texte
+    || (n ? (n === 1 ? '1 date choisie' : n + ' dates choisies') : 'Touchez les dates complètes qui vous intéressent');
+}
+function wlMajTout() {
+  const tout = document.getElementById('wl-tout').checked;
+  document.getElementById('wl-cal').style.display = tout ? 'none' : 'block';
+}
+function wlBasculer(dateStr, el) {
+  if (wlDates.has(dateStr)) wlDates.delete(dateStr);
+  else if (wlDates.size >= WL_MAX_DATES) { wlMajInfo(WL_MAX_DATES + ' dates maximum'); return; }
+  else wlDates.add(dateStr);
+  const choisi = wlDates.has(dateStr);
+  el.classList.toggle('choisi', choisi);
+  el.setAttribute('aria-pressed', choisi ? 'true' : 'false');
+  wlMajInfo();
+}
+async function wlAfficherCalendrier() {
+  const token = ++wlToken;
+  const { y, m: mo } = wlMois;
+  const maintenant = new Date(), max = wlDateMax();
+  document.getElementById('wl-cal-titre').textContent = `${MONTH_NAMES[mo]} ${y}`;
+  document.getElementById('wl-prev').disabled = y === maintenant.getFullYear() && mo === maintenant.getMonth();
+  document.getElementById('wl-next').disabled = y === max.getFullYear() && mo === max.getMonth();
+  wlMajInfo('Chargement...');
+  const grid = document.getElementById('wl-cal-grid');
+  let weekly, dispos;
+  const mm = String(mo + 1).padStart(2, '0');
+  const monthKey = `${y}-${mm}`, monthStart = `${y}-${mm}-01`, monthEnd = `${y}-${mm}-31`;
+  try {
+    weekly = await getWeeklyHours();
+    if (!availabilityCache[monthKey]) {
+      availabilityCache[monthKey] = dbCall('disponibilites', 'select', {
+        filters: [{ col: 'date', op: 'gte', value: monthStart }, { col: 'date', op: 'lte', value: monthEnd }]
+      }).then(r => r.data || []).catch(e => { delete availabilityCache[monthKey]; throw e; });
+    }
+    dispos = await availabilityCache[monthKey];
+    await ensureMonthBookingsLoaded(monthKey, monthStart, monthEnd);
+  } catch (e) {
+    if (token === wlToken) wlMajInfo('Calendrier indisponible, merci de réessayer.');
+    return;
+  }
+  if (token !== wlToken) return;
+
+  const frag = document.createDocumentFragment();
+  DAY_NAMES.forEach(n => {
+    const h = document.createElement('div');
+    h.className = 'cal-day-name';
+    h.textContent = n.charAt(0);
+    frag.appendChild(h);
+  });
+  const premier = new Date(y, mo, 1).getDay();
+  for (let i = 0; i < (premier === 0 ? 6 : premier - 1); i++) frag.appendChild(document.createElement('div'));
+  const today = formatDate(maintenant), dateMax = formatDate(max);
+  const duree = selected.prestation ? selected.prestation.duree_min : 60;
+  const nbJours = new Date(y, mo + 1, 0).getDate();
+  let complets = 0;
+  for (let d = 1; d <= nbJours; d++) {
+    const dt = new Date(y, mo, d), dateStr = formatDate(dt), dow = dt.getDay();
+    const avail = findAvail(dispos, dateStr);
+    let complet = false;
+    if (dateStr > today && dateStr <= dateMax && !isDayClosed(weekly, dow, avail)) {
+      complet = !computeDaySlots(dow, weekly, avail, bookedCache[dateStr] || [], duree).some(s => !s.booked);
+    }
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'wl-jour';
+    b.textContent = d;
+    b.disabled = !complet;
+    if (complet) {
+      complets++;
+      const choisi = wlDates.has(dateStr);
+      b.classList.add('dispo');
+      b.classList.toggle('choisi', choisi);
+      b.setAttribute('aria-pressed', choisi ? 'true' : 'false');
+      b.onclick = () => wlBasculer(dateStr, b);
+    }
+    frag.appendChild(b);
+  }
+  grid.replaceChildren(frag);
+  wlMajInfo(complets || wlDates.size ? '' : 'Aucune date complète ce mois-ci');
 }
 // Mois affiché sans aucun jour disponible : on met la liste d'attente en avant
 function majListeAttente(aucunJourLibre) {
@@ -809,6 +933,11 @@ async function inscrireListeAttente() {
     msg.style.color = '#FFB4B4'; msg.textContent = 'Merci de remplir prénom, email et téléphone.'; return;
   }
   if (!selected.prestation) { msg.style.color = 'var(--error)'; msg.textContent = 'Choisissez d\'abord une prestation.'; return; }
+  const toutes = document.getElementById('wl-tout').checked;
+  if (!toutes && !wlDates.size) {
+    msg.style.color = '#FFB4B4'; msg.textContent = 'Choisissez au moins une date, ou cochez « Peu importe la date ».'; return;
+  }
+  data.dates = toutes ? [] : Array.from(wlDates).sort();
   const btn = document.getElementById('wl-btn');
   btn.disabled = true; msg.style.color = ''; msg.textContent = 'Inscription...';
   try {
@@ -820,7 +949,7 @@ async function inscrireListeAttente() {
     if (!res.ok) throw new Error(json.error || 'Erreur');
     const box = document.getElementById('wl-box');
     box.dataset.ok = '1';
-    box.innerHTML = '<div class="wl-txt" style="margin:0;text-align:center;font-weight:600;">🔔 C\'est noté ' + data.prenom.replace(/[<>&]/g, '') + ' ! Vous recevrez un email dès qu\'une place se libère pour cette prestation.</div>';
+    box.innerHTML = '<div class="wl-txt" style="margin:0;text-align:center;font-weight:600;">🔔 C\'est noté ' + data.prenom.replace(/[<>&]/g, '') + ' ! Vous recevrez un email dès qu\'une place se libère' + (data.dates.length ? ' sur vos dates.' : '.') + '</div>';
   } catch (e) {
     btn.disabled = false; msg.style.color = '#FFB4B4'; msg.textContent = e.message;
   }

@@ -16,8 +16,10 @@ const TABLES = {
   couts_materiel: ['nom','cout'],
   // Budget du mois (admin uniquement) : une ligne par mois "AAAA-MM", contenu en JSON
   budget_mois: ['mois','data'],
+  // Clientes à ne plus relancer pour l'entretien (admin uniquement)
+  relances_stop: ['cle','depuis'],
   // Liste d'attente (admin uniquement ; l'inscription publique passe par liste-attente.js)
-  liste_attente: ['id','prenom','nom','email','telephone','prestation_nom','duree_min','creneaux_init','creneaux_trouves','statut','email_envoye','prevenue_at','created_at']
+  liste_attente: ['id','prenom','nom','email','telephone','prestation_nom','duree_min','creneaux_init','creneaux_trouves','dates_souhaitees','statut','email_envoye','prevenue_at','created_at']
 };
 
 const TABLES_AUTO = {
@@ -26,6 +28,7 @@ const TABLES_AUTO = {
   ventes_produits: 'CREATE TABLE IF NOT EXISTS ventes_produits (id INTEGER PRIMARY KEY AUTOINCREMENT, produit_nom TEXT NOT NULL, prix REAL NOT NULL, cout REAL, quantite INTEGER DEFAULT 1, date TEXT NOT NULL, reservation_id INTEGER, prenom TEXT, nom TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)',
   couts_materiel: 'CREATE TABLE IF NOT EXISTS couts_materiel (nom TEXT PRIMARY KEY, cout REAL NOT NULL)',
   budget_mois: 'CREATE TABLE IF NOT EXISTS budget_mois (mois TEXT PRIMARY KEY, data TEXT NOT NULL)',
+  relances_stop: 'CREATE TABLE IF NOT EXISTS relances_stop (cle TEXT PRIMARY KEY, depuis TEXT NOT NULL)',
   liste_attente: require('./lib/creneaux').CREATE_LISTE_ATTENTE
 };
 const tablesPretes = {};

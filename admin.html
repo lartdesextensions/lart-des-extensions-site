@@ -276,6 +276,7 @@ tr:hover td{background:var(--cream);}
     <div class="nav-item active" onclick="showSection('dashboard')">📊 Vue d'ensemble</div>
     <div class="nav-item" onclick="showSection('agenda')">🗓️ Agenda du jour</div>
     <div class="nav-item" onclick="showSection('reservations')">📅 Réservations</div>
+    <div class="nav-item" onclick="showSection('annules')">❌ RDV annulés <span id="annules-badge" style="display:none;background:var(--error);color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:4px;"></span></div>
     <div class="nav-item" onclick="showSection('budget')">💶 Budget du mois</div>
     <div class="nav-section">Gestion</div>
     <div class="nav-item" onclick="showSection('disponibilites')">🗓 Disponibilités</div>
@@ -288,6 +289,18 @@ tr:hover td{background:var(--cream);}
   </div>
 
   <div class="content">
+
+    <!-- RDV ANNULÉS -->
+    <div class="section" id="sec-annules">
+      <div class="content-title">RDV annulés</div>
+      <div class="content-sub">Rembourse la cliente ou garde son acompte.</div>
+      <div style="display:flex;gap:8px;margin:16px 0;">
+        <button class="action-btn" id="annules-f-traiter" onclick="filtrerAnnules('traiter')">À traiter</button>
+        <button class="action-btn" id="annules-f-tous" onclick="filtrerAnnules('tous')">Tous</button>
+      </div>
+      <div id="annules-msg" class="msg"></div>
+      <div id="annules-liste"></div>
+    </div>
 
     <!-- BUDGET DU MOIS -->
     <div class="section" id="sec-budget">
@@ -579,7 +592,7 @@ tr:hover td{background:var(--cream);}
     <!-- CLIENTS BLOQUES -->
     <div class="section" id="sec-attente">
       <div class="content-title">Liste d'attente</div>
-      <div class="content-sub">Clientes qui veulent être prévenues si une place se libère pour leur prestation. Le site vérifie toutes les 15 minutes et leur envoie un email automatiquement.</div>
+      <div class="content-sub">Le site vérifie toutes les 15 minutes et envoie un email à chaque nouvelle place sur les dates choisies par la cliente. Les alertes s'arrêtent dès qu'elle réserve.</div>
       <div id="attente-info" style="display:none;font-size:.8rem;background:#FFF8E1;border-radius:8px;padding:10px 14px;margin-bottom:14px;"></div>
       <div class="table-wrap">
         <table>
@@ -977,6 +990,7 @@ function showSection(id) {
   if (id === 'clients') loadClients();
   if (id === 'bloques') loadBloques();
   if (id === 'attente') loadAttente();
+  if (id === 'annules') loadAnnules();
   if (id === 'disponibilites') { renderAdminCal(); loadWeeklyHours(); loadBlocages(); }
 }
 
@@ -1133,6 +1147,7 @@ async function initApp() {
   await chargerCoutsPerso();
   await chargerBudget();
   dbCall('liste_attente', 'select').then(r => majBadgeAttente(r.data)).catch(() => {});
+  chargerAnnules().catch(() => {});
   await loadDashboard();
   renderAdminCal();
   rafraichirCloche(true);
@@ -1289,6 +1304,37 @@ function cleClienteRdv(r) {
   return t.length >= 9 ? 't:' + t : null;
 }
 
+// Lien WhatsApp vers la cliente : le numéro doit être au format international sans « + »
+function lienWhatsApp(telephone, texte) {
+  const brut = String(telephone || '').trim();
+  let n = brut.replace(/\D/g, '');
+  if (n.startsWith('00')) n = n.slice(2);
+  else if (!brut.startsWith('+') && /^0\d{9}$/.test(n)) n = '33' + n.slice(1);
+  if (n.length < 10) return '';
+  return 'https://wa.me/' + n + (texte ? '?text=' + encodeURIComponent(texte) : '');
+}
+
+// Le numéro pro passe par l'application Onoff, qu'un lien ne peut pas ouvrir :
+// 1er appui = copie du numéro, 2e appui = copie du message, à coller dans Onoff.
+async function copierTexte(texte) {
+  try { await navigator.clipboard.writeText(texte); return true; } catch (e) {}
+  const t = document.createElement('textarea');
+  t.value = texte; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+  document.body.appendChild(t); t.select(); t.setSelectionRange(0, texte.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  t.remove();
+  return ok;
+}
+async function copierPourOnoff(b) {
+  const messageSuivant = b.dataset.etape === 'message';
+  const ok = await copierTexte(messageSuivant ? b.dataset.texte : b.dataset.tel);
+  if (!ok) { alert('Copie impossible. Numéro : ' + b.dataset.tel); return; }
+  if (messageSuivant) { b.dataset.etape = ''; b.textContent = '✓ Message copié'; return; }
+  if (b.dataset.texte) { b.dataset.etape = 'message'; b.textContent = '✓ Numéro copié · Copier le message'; }
+  else b.textContent = '✓';
+}
+
 function relancesMasquees() {
   try { return JSON.parse(localStorage.getItem('relances_masquees') || '{}'); } catch (e) { return {}; }
 }
@@ -1297,6 +1343,27 @@ function masquerRelance(cle) {
   const m = relancesMasquees();
   m[cle] = Date.now() + 30 * 24 * 60 * 60 * 1000;
   try { localStorage.setItem('relances_masquees', JSON.stringify(m)); } catch (e) {}
+  renderRelances();
+  if (typeof rafraichirCloche === 'function') rafraichirCloche();
+}
+
+// « Ne plus relancer » : enregistré dans la base pour valoir sur tous les appareils.
+// Si la cliente revient pour une nouvelle pose ou un entretien, le suivi reprend.
+let relancesStop = {};
+async function chargerRelancesStop() {
+  try {
+    const { data } = await dbCall('relances_stop', 'select');
+    relancesStop = {};
+    (data || []).forEach(r => { relancesStop[r.cle] = r.depuis; });
+  } catch (e) { console.error('Relances : liste « ne plus relancer » indisponible', e); }
+}
+async function nePlusRelancer(cle, prenom) {
+  if (!confirm(`Ne plus relancer ${prenom || 'cette cliente'} ?`)) return;
+  const depuis = fmtDate(new Date());
+  try {
+    await dbCall('relances_stop', 'upsert', { payload: { cle, depuis }, onConflict: 'cle' });
+  } catch (e) { alert('Enregistrement impossible : ' + e.message); return; }
+  relancesStop[cle] = depuis;
   renderRelances();
   if (typeof rafraichirCloche === 'function') rafraichirCloche();
 }
@@ -1324,6 +1391,7 @@ function calculerRelances(rdvs) {
   const now = new Date(today + 'T12:00:00');
   return Object.entries(parCliente)
     .filter(([cle, c]) => c.dernier && !c.futur && !(masquees[cle] && masquees[cle] > Date.now()))
+    .filter(([cle, c]) => !(relancesStop[cle] && c.dernier.date <= relancesStop[cle]))
     .map(([cle, c]) => ({ cle, ...c, jours: Math.round((now - new Date(c.dernier.date + 'T12:00:00')) / 86400000) }))
     .filter(c => c.jours >= RELANCE_JOURS)
     .sort((a, b) => b.jours - a.jours);
@@ -1341,9 +1409,11 @@ function renderRelances() {
     const semaines = Math.floor(c.jours / 7);
     const tel = String(c.telephone || '').replace(/\s/g, '');
     const texte = `Bonjour ${c.prenom}, ici L'Art des Extensions. Votre dernier entretien remonte à ${semaines} semaines : pensez à reprendre rendez-vous pour garder vos bandes en parfait état. Réservation : lartdesextensions.fr`;
+    const wa = lienWhatsApp(c.telephone, texte);
     const liens = tel
       ? `<a href="tel:${escHtml(tel)}" class="action-btn" style="text-decoration:none;">📞 Appeler</a>
-         <a href="sms:${escHtml(tel)}&body=${encodeURIComponent(texte)}" class="action-btn" style="text-decoration:none;">💬 SMS</a>`
+         ${wa ? `<a href="${escHtml(wa)}" target="_blank" rel="noopener" class="action-btn" style="text-decoration:none;">🟢 WhatsApp</a>` : ''}
+         <button type="button" class="action-btn" data-tel="${escHtml(tel)}" data-texte="${escHtml(texte)}" onclick="copierPourOnoff(this)">📋 SMS Onoff</button>`
       : '';
     return `<div style="padding:10px 0;border-top:1px solid var(--beige);">
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:.88rem;">
@@ -1354,6 +1424,7 @@ function renderRelances() {
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         ${liens}
         <button class="action-btn" onclick="masquerRelance('${escHtml(c.cle)}')">Masquer 30 jours</button>
+        <button class="action-btn" data-cle="${escHtml(c.cle)}" data-prenom="${escHtml(c.prenom)}" onclick="nePlusRelancer(this.dataset.cle, this.dataset.prenom)">🚫 Ne plus relancer</button>
       </div>
     </div>`;
   }).join('');
@@ -1369,6 +1440,7 @@ async function loadDashboard() {
   if (!rdvs) return;
   dashAllRdvs = rdvs.filter(r => !reservationAbandonnee(r));
   await renderDashboardStats();
+  await chargerRelancesStop();
   renderRelances();
 
   const upcoming = rdvs.filter(r => r.date >= today).slice(0, 10);
@@ -2370,7 +2442,7 @@ async function openModal(r) {
   currentRdv = r;
   document.getElementById('modal-title').textContent = `${r.prenom} ${r.nom}`;
   const remboursementLigne = r.statut === 'annule'
-    ? `<br><strong>Acompte remboursé :</strong> ${r.acompte_rembourse === true ? 'Oui' : (r.acompte_rembourse === false ? 'Non' : '—')}`
+    ? `<br><strong>Acompte remboursé :</strong> ${Number(r.acompte_rembourse) === 1 ? 'Oui' : (Number(r.acompte_rembourse) === ACOMPTE_GARDE ? 'Non, acompte gardé' : 'Non')}`
     : '';
   const paiementLigne = r.acompte_paye
     ? `<span style="color:var(--success);">✓ Payé (${r.payment_method === 'stripe' ? 'carte' : (r.payment_method === 'scalapay' ? 'Scalapay' : 'manuel')})</span>`
@@ -2572,6 +2644,120 @@ async function changeStatut(s) {
   refreshAllViews();
 }
 
+// ── RDV ANNULÉS ──
+// acompte_rembourse : 0 = à décider, 1 = remboursé, 2 = acompte gardé
+const ACOMPTE_GARDE = 2;
+const PAIEMENT_LIBELLE = { stripe: 'Carte', scalapay: 'Scalapay', paypal: 'PayPal', especes: 'Espèces' };
+let annulesListe = [], annulesFiltre = null;
+
+// Un RDV à plusieurs prestations (même groupe_id) = une seule ligne ;
+// le paiement est porté par une seule de ses prestations.
+function regrouperAnnules(rows) {
+  const groupes = {};
+  rows.forEach(r => { (groupes[r.groupe_id || ('id' + r.id)] = groupes[r.groupe_id || ('id' + r.id)] || []).push(r); });
+  return Object.values(groupes).map(lignes => {
+    const paiement = lignes.find(r => encaisseEnLigne(r) > 0) || null;
+    const valeur = paiement ? Number(paiement.acompte_rembourse) || 0 : 0;
+    const etat = !paiement ? 'sans'
+      : valeur === 1 ? 'rembourse'
+      : (valeur === ACOMPTE_GARDE || estPasVenue(paiement)) ? 'garde' : 'traiter';
+    return {
+      id: (paiement || lignes[0]).id, r: lignes[0], paiement, etat,
+      montant: paiement ? encaisseEnLigne(paiement) : 0,
+      prestations: lignes.map(r => r.prestation_nom).filter(Boolean).join(' + '),
+      auto: !!(paiement && paiement.payment_id && ['stripe', 'scalapay'].includes(paiement.payment_method))
+    };
+  }).sort((a, b) => String(b.r.date).localeCompare(String(a.r.date)));
+}
+async function chargerAnnules() {
+  const { data } = await dbCall('reservations', 'select', { filters: [{ col: 'statut', op: 'eq', value: 'annule' }] });
+  annulesListe = regrouperAnnules(data || []);
+  const n = annulesListe.filter(a => a.etat === 'traiter').length;
+  const b = document.getElementById('annules-badge');
+  b.textContent = n; b.style.display = n ? 'inline' : 'none';
+}
+async function loadAnnules() {
+  const zone = document.getElementById('annules-liste');
+  try { await chargerAnnules(); }
+  catch (e) { zone.textContent = 'Erreur : ' + e.message; return; }
+  if (!annulesFiltre) annulesFiltre = annulesListe.some(a => a.etat === 'traiter') ? 'traiter' : 'tous';
+  renderAnnules();
+}
+function filtrerAnnules(f) { annulesFiltre = f; renderAnnules(); }
+function renderAnnules() {
+  const nb = annulesListe.filter(a => a.etat === 'traiter').length;
+  const btT = document.getElementById('annules-f-traiter'), btA = document.getElementById('annules-f-tous');
+  btT.textContent = `À traiter (${nb})`;
+  [[btT, 'traiter'], [btA, 'tous']].forEach(([b, f]) => {
+    const actif = annulesFiltre === f;
+    b.style.background = actif ? 'var(--dark)' : ''; b.style.color = actif ? 'var(--white)' : '';
+  });
+  const liste = annulesFiltre === 'traiter' ? annulesListe.filter(a => a.etat === 'traiter') : annulesListe;
+  const zone = document.getElementById('annules-liste');
+  if (!liste.length) {
+    zone.innerHTML = `<div style="text-align:center;color:var(--taupe);padding:28px;">${annulesFiltre === 'traiter' ? 'Rien à traiter.' : 'Aucun RDV annulé.'}</div>`;
+    return;
+  }
+  const BADGES = {
+    traiter: ['badge-wait', 'À décider'], rembourse: ['badge-ok', 'Remboursé'],
+    garde: ['badge-cancel', 'Acompte gardé'], sans: ['', 'Rien à rembourser']
+  };
+  zone.innerHTML = liste.map(a => {
+    const mode = a.paiement ? (PAIEMENT_LIBELLE[a.paiement.payment_method] || 'Sur place') : '';
+    const m = `${a.montant} €`;
+    let boutons = '';
+    if (a.etat === 'traiter') {
+      boutons = (a.auto
+        ? `<button class="btn-sm" style="background:var(--dark);color:var(--white);" onclick="rembourserAnnule(${Number(a.id)})">Rembourser ${m}</button>`
+        : '')
+        + `<button class="btn-sm" style="background:var(--beige);color:var(--dark);" onclick="garderAcompte(${Number(a.id)})">Garder l'acompte</button>`
+        + `<button class="action-btn" onclick="marquerRembourse(${Number(a.id)})">${a.auto ? 'Déjà remboursé' : 'Remboursé à la main'}</button>`;
+    } else if (a.etat === 'garde') {
+      boutons = a.auto
+        ? `<button class="action-btn" onclick="rembourserAnnule(${Number(a.id)})">Rembourser finalement ${m}</button>`
+        : `<button class="action-btn" onclick="marquerRembourse(${Number(a.id)})">Remboursé à la main</button>`;
+    }
+    return `<div style="background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+        <strong>${escHtml(a.r.prenom)} ${escHtml(a.r.nom)}</strong>
+        <span class="badge ${BADGES[a.etat][0]}" style="white-space:nowrap;">${BADGES[a.etat][1]}</span>
+      </div>
+      <div style="font-size:.76rem;color:var(--taupe-dark);margin-top:3px;">${fmtDateFR(a.r.date)} à ${escHtml(a.r.heure)} · ${escHtml(a.prestations)}</div>
+      ${a.paiement ? `<div style="font-size:.9rem;font-weight:600;margin-top:8px;">${m} <span style="font-size:.74rem;font-weight:400;color:var(--taupe-dark);">payé · ${escHtml(mode)}</span></div>` : ''}
+      ${boutons ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">${boutons}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+async function majAcompteAnnule(id, valeur, message) {
+  try {
+    await dbCall('reservations', 'update', { payload: { acompte_rembourse: valeur }, filters: [{ col: 'id', op: 'eq', value: id }] });
+  } catch (e) { alert('Enregistrement impossible : ' + e.message); return; }
+  showMsg('annules-msg', message, true);
+  loadAnnules();
+}
+function garderAcompte(id) {
+  const a = annulesListe.find(x => x.id === id);
+  if (a && confirm(`Garder l'acompte de ${a.montant} € de ${a.r.prenom} ?`)) majAcompteAnnule(id, ACOMPTE_GARDE, 'Acompte gardé.');
+}
+function marquerRembourse(id) {
+  const a = annulesListe.find(x => x.id === id);
+  if (a && confirm(`Confirmer que ${a.r.prenom} a déjà récupéré ses ${a.montant} € ? Aucun remboursement ne sera lancé.`)) majAcompteAnnule(id, 1, 'Marqué comme remboursé.');
+}
+async function rembourserAnnule(id) {
+  const a = annulesListe.find(x => x.id === id);
+  if (!a || !confirm(`Rembourser ${a.montant} € à ${a.r.prenom} ${a.r.nom || ''} ? Le remboursement part tout de suite et ne peut pas être annulé.`)) return;
+  document.querySelectorAll('#annules-liste button').forEach(b => { b.disabled = true; });
+  try {
+    const res = await fetch('/.netlify/functions/refund', { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ reservationId: id }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Remboursement refusé');
+    showMsg('annules-msg', `${a.montant} € remboursés à ${a.r.prenom}.`, true);
+  } catch (e) {
+    alert('Le remboursement a échoué : ' + e.message);
+  }
+  loadAnnules();
+}
+
 // « Pas venue » : même déroulé que l'annulation (le créneau est libéré),
 // mais le rendez-vous est marqué comme absence et c'est Jessie qui choisit
 // de rembourser ou de garder l'acompte.
@@ -2617,7 +2803,10 @@ async function finalizeCancel(remboursed) {
     }
   }
 
-  const payloadAnnul = { statut: 'annule', acompte_rembourse: remboursed && autoRefundOutcome !== 'failed' };
+  const payloadAnnul = {
+    statut: 'annule',
+    acompte_rembourse: remboursed ? (autoRefundOutcome !== 'failed' ? 1 : 0) : (flowPasVenue ? ACOMPTE_GARDE : 0)
+  };
   if (flowPasVenue && !estPasVenue(currentRdv)) {
     payloadAnnul.message = (MARQUE_PAS_VENUE + ' ' + String(currentRdv.message || '')).trim();
   }
@@ -2634,6 +2823,7 @@ async function finalizeCancel(remboursed) {
   }
   closeModal();
   refreshAllViews();
+  chargerAnnules().catch(() => {});
 
   if (autoRefundOutcome === 'success') {
     alert('✓ Remboursement effectué automatiquement (Stripe ou Scalapay).');
@@ -2673,6 +2863,7 @@ const ATTENTE_STATUTS = {
   a_prevenir: ['📞 À prévenir (email non parti)', 'var(--error)'],
   prevenue: ['✅ Prévenue par email', 'var(--success)'],
   traitee: ['✔︎ Traitée', 'var(--taupe)'],
+  desinscrite: ['Désinscrite', 'var(--taupe)'],
   expiree: ['Expirée (90 jours)', 'var(--taupe)']
 };
 function escA(v) { return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -2706,15 +2897,20 @@ async function loadAttente() {
       const t = JSON.parse(r.creneaux_trouves || '[]');
       if (t.length) trouves = '<div style="font-size:.72rem;color:var(--taupe-dark);margin-top:3px;">Libéré : ' + t.map(j => `${j.date.split('-').reverse().slice(0,2).join('/')} (${(j.heures||[]).slice(0,3).join(', ')}${(j.heures||[]).length > 3 ? '…' : ''})`).map(escA).join(' · ') + '</div>';
     } catch (e) {}
+    let datesVoulues = 'Toutes les dates';
+    try {
+      const v = JSON.parse(r.dates_souhaitees || '[]');
+      if (v.length) datesVoulues = v.map(d => d.split('-').reverse().slice(0, 2).join('/')).join(', ');
+    } catch (e) {}
     const tel = String(r.telephone || '').replace(/\s/g, '');
     const dateInsc = r.created_at ? new Date(String(r.created_at).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR') : '—';
     return `<tr>
       <td><strong>${escA(r.prenom)} ${escA(r.nom || '')}</strong><div style="font-size:.75rem;color:var(--taupe-dark);">${escA(r.telephone || '')}<br>${escA(r.email)}</div></td>
-      <td>${escA(r.prestation_nom || '—')}<div style="font-size:.72rem;color:var(--taupe);">${escA(r.duree_min)} min</div></td>
+      <td>${escA(r.prestation_nom || '—')}<div style="font-size:.72rem;color:var(--taupe);">${escA(r.duree_min)} min</div><div style="font-size:.72rem;color:var(--taupe-dark);margin-top:3px;">📅 ${escA(datesVoulues)}</div></td>
       <td>${dateInsc}</td>
       <td><span style="color:${st[1]};font-weight:500;">${st[0]}</span>${trouves}</td>
       <td style="white-space:nowrap;">
-        ${tel ? `<a class="action-btn" href="tel:${escA(tel)}">📞</a> <a class="action-btn" href="sms:${escA(tel)}">💬</a>` : ''}
+        ${tel ? `<a class="action-btn" href="tel:${escA(tel)}">📞</a> ${lienWhatsApp(r.telephone) ? `<a class="action-btn" href="${escA(lienWhatsApp(r.telephone))}" target="_blank" rel="noopener" title="WhatsApp">🟢</a> ` : ''}<button type="button" class="action-btn" data-tel="${escA(tel)}" onclick="copierPourOnoff(this)" title="Copier le numéro pour Onoff">📋</button>` : ''}
         <a class="action-btn" href="mailto:${escA(r.email)}">✉️</a>
         ${r.statut === 'en_attente' ? '' : `<button class="action-btn" onclick="setAttenteStatut(${Number(r.id)}, 'en_attente')" title="La remettre en attente : elle sera re-prévenue si une autre place se libère">↺</button>`}
         ${r.statut !== 'traitee' ? `<button class="action-btn" onclick="setAttenteStatut(${Number(r.id)}, 'traitee')" title="Marquer comme traitée">✔︎</button>` : ''}

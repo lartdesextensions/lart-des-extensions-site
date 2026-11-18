@@ -3,6 +3,8 @@
 // ouvertures exceptionnelles, réservations payées, blocages horaires).
 // Utilisé par la liste d'attente.
 
+const crypto = require('crypto');
+
 function timeToMin(t) {
   const [h, m] = String(t).split(':').map(Number);
   return h * 60 + (m || 0);
@@ -104,19 +106,59 @@ const CREATE_LISTE_ATTENTE = `CREATE TABLE IF NOT EXISTS liste_attente (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   prenom TEXT NOT NULL, nom TEXT, email TEXT NOT NULL, telephone TEXT,
   prestation_nom TEXT, duree_min INTEGER NOT NULL,
-  creneaux_init TEXT, creneaux_trouves TEXT,
+  creneaux_init TEXT, creneaux_trouves TEXT, dates_souhaitees TEXT,
   statut TEXT DEFAULT 'en_attente', email_envoye INTEGER DEFAULT 0,
   prevenue_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`;
 
-// Jours qui n'avaient AUCUN créneau libre à l'inscription et en ont un maintenant.
-// Les jours ajoutés au-delà de la fenêtre d'origine ne comptent pas (sinon chaque
-// nouveau jour du calendrier déclencherait une fausse alerte).
-function joursLiberes(init, maintenant) {
-  let ref = {};
-  try { ref = JSON.parse(init || '{}'); } catch (e) { ref = {}; }
-  const deja = new Set(ref.jours || []);
-  const fin = ref.fin || '9999-12-31';
-  return Object.keys(maintenant).filter(d => d <= fin && !deja.has(d)).sort();
+// Ajoute la colonne des dates choisies aux bases créées avant cette option
+let colonnesPretes = false;
+async function preparerListeAttente(db) {
+  if (colonnesPretes) return;
+  await db.execute(CREATE_LISTE_ATTENTE);
+  try {
+    await db.execute('ALTER TABLE liste_attente ADD COLUMN dates_souhaitees TEXT');
+  } catch (e) {
+    if (!/duplicate column/i.test(String(e.message))) throw e;
+  }
+  colonnesPretes = true;
 }
 
-module.exports = { creneauxLibres, joursLiberes, CREATE_LISTE_ATTENTE, dateParis };
+function lireJson(v, defaut) {
+  try { return JSON.parse(v) || defaut; } catch (e) { return defaut; }
+}
+
+// Dates choisies par la cliente ; null = toutes les dates l'intéressent
+function datesSouhaitees(entree) {
+  const d = lireJson(entree.dates_souhaitees, null);
+  return Array.isArray(d) && d.length ? d : null;
+}
+
+// Photo du planning : les jours déjà connus comme libres pour cette cliente
+function photoPlanning(maintenant, fenetre) {
+  return JSON.stringify({ v: 2, fin: dateParis(fenetre), jours: Object.keys(maintenant).sort() });
+}
+
+// Jours devenus libres depuis la dernière photo (limités aux dates choisies).
+// Sans date choisie, les jours ajoutés au bout du calendrier ne comptent pas
+// (sinon chaque nouveau jour déclencherait une fausse alerte).
+function joursLiberes(entree, maintenant) {
+  const ref = lireJson(entree.creneaux_init, {});
+  const deja = new Set(ref.jours || []);
+  const choisies = datesSouhaitees(entree);
+  const fin = ref.fin || '9999-12-31';
+  return Object.keys(maintenant)
+    .filter(d => !deja.has(d) && (choisies ? choisies.includes(d) : d <= fin))
+    .sort();
+}
+
+// Lien de désinscription : signé pour qu'on ne puisse pas désinscrire quelqu'un d'autre
+function jetonStop(id, email) {
+  const base = process.env.ADMIN_SESSION_SECRET || process.env.TURSO_AUTH_TOKEN || '';
+  return crypto.createHmac('sha256', 'liste-attente-stop:' + base)
+    .update(id + ':' + String(email).toLowerCase()).digest('hex').slice(0, 32);
+}
+
+module.exports = {
+  creneauxLibres, joursLiberes, photoPlanning, datesSouhaitees, lireJson,
+  preparerListeAttente, jetonStop, CREATE_LISTE_ATTENTE, dateParis
+};

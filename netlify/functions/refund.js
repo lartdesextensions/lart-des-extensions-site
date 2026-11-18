@@ -24,6 +24,12 @@ exports.handler = async function (event) {
     });
     const r = res.rows[0];
     if (!r) return json({ error: 'Réservation introuvable' }, 404);
+    // Jamais deux remboursements pour le même rendez-vous
+    if (Number(r.acompte_rembourse) === 1) return json({ error: 'Ce rendez-vous est déjà remboursé.' }, 409);
+    const marquerRembourse = () => db.execute({
+      sql: 'UPDATE reservations SET acompte_rembourse = 1 WHERE id = ?',
+      args: [reservationId]
+    });
 
     if (r.payment_id && r.payment_method === 'scalapay') {
       // Remboursement de la totalité encaissée via Scalapay
@@ -42,6 +48,7 @@ exports.handler = async function (event) {
         console.error('Erreur remboursement Scalapay:', sp.status, JSON.stringify(data));
         return json({ error: 'Scalapay : ' + (data.message || 'remboursement refusé') }, 502);
       }
+      await marquerRembourse();
       return json({ success: true, refund: { id: data.refundToken || data.token || r.payment_id, status: 'refunded' } });
     }
 
@@ -51,6 +58,7 @@ exports.handler = async function (event) {
 
     const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
     const refund = await stripe.refunds.create({ payment_intent: r.payment_id });
+    await marquerRembourse();
 
     return json({ success: true, refund: { id: refund.id, status: refund.status } });
   } catch (err) {
