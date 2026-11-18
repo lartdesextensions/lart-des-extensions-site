@@ -117,6 +117,19 @@ Reste à encaisser : ${esc(p.reste)} €
   return { subject: `Nouvelle réservation - ${p.prestation}`, html };
 }
 
+// Version texte du mail, envoyée avec la version HTML (meilleure délivrabilité)
+function versionTexte(html) {
+  return String(html)
+    .replace(/<div[^>]*role="img"[^>]*>.*?<\/div>/gs, '')
+    .replace(/<a [^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gs, '$2 : $1')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+    .split('\n').map(l => l.trim()).join('\n')
+    .replace(/\n{3,}/g, '\n\n').trim();
+}
+
 async function sendViaBrevo(to, toName, contenu, replyTo, senderName) {
   try {
     const from = process.env.EMAIL_FROM || 'contact@lartdesextensions.fr';
@@ -124,7 +137,8 @@ async function sendViaBrevo(to, toName, contenu, replyTo, senderName) {
       sender: { name: senderName || SALON_NOM, email: from },
       to: [{ email: to, name: toName || undefined }],
       subject: contenu.subject,
-      htmlContent: contenu.html
+      htmlContent: contenu.html,
+      textContent: versionTexte(contenu.html)
     };
     if (replyTo) body.replyTo = { email: replyTo };
     const res = await fetch('https://api.brevo.com/v3/smtp/email', {
