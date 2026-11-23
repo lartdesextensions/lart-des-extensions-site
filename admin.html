@@ -3027,10 +3027,14 @@ async function loadAttente() {
       const t = JSON.parse(r.creneaux_trouves || '[]');
       if (t.length) trouves = '<div style="font-size:.72rem;color:var(--taupe-dark);margin-top:3px;">Libéré : ' + t.map(j => `${j.date.split('-').reverse().slice(0,2).join('/')} (${(j.heures||[]).slice(0,3).join(', ')}${(j.heures||[]).length > 3 ? '…' : ''})`).map(escA).join(' · ') + '</div>';
     } catch (e) {}
-    let datesVoulues = 'Toutes les dates';
+    // Sans date choisie, la liste d'attente surveille les 90 prochains jours
+    // (fenêtre glissante) : on l'écrit en clair avec le mois.
+    const jourMois = d => new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long' });
+    const finFenetre = new Date(); finFenetre.setDate(finFenetre.getDate() + 90);
+    let datesVoulues = `N'importe quelle date, d'aujourd'hui au ${finFenetre.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
     try {
       const v = JSON.parse(r.dates_souhaitees || '[]');
-      if (v.length) datesVoulues = v.map(d => d.split('-').reverse().slice(0, 2).join('/')).join(', ');
+      if (v.length) datesVoulues = v.map(jourMois).join(', ');
     } catch (e) {}
     const tel = String(r.telephone || '').replace(/\s/g, '');
     const dateInsc = r.created_at ? new Date(String(r.created_at).replace(' ', 'T') + 'Z').toLocaleDateString('fr-FR') : '—';
