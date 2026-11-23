@@ -151,6 +151,10 @@ tr:hover td{background:var(--cream);}
 .planning-hour-line{position:absolute;left:0;right:0;border-top:1px solid var(--beige);}
 .planning-block{position:absolute;left:6px;right:6px;border-radius:6px;padding:6px 8px;overflow:hidden;cursor:pointer;font-size:.72rem;line-height:1.3;color:var(--dark);border-left:4px solid;z-index:2;}
 .planning-block-name{font-weight:600;}
+.planning-groupe{padding:0;background:var(--white);cursor:default;}
+.planning-seg{position:absolute;left:0;right:0;padding:3px 8px;overflow:hidden;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.7);box-sizing:border-box;}
+.planning-seg:last-child{border-bottom:none;}
+.planning-seg:hover{filter:brightness(.95);}
 .planning-block-meta{opacity:.85;}
 .planning-blocage{background:repeating-linear-gradient(45deg,#3a3a3a,#3a3a3a 8px,#2a2a2a 8px,#2a2a2a 16px);color:var(--white);border-left-color:#1a1a1a;}
 .planning-blocage .planning-block-name,.planning-blocage .planning-block-meta{color:var(--white);}
@@ -1965,7 +1969,7 @@ function updateNrTotalSummary() {
   const ligneMo = `Matériel : ${fmtEur(totalMat)} · Main-d'œuvre : <strong>${fmtEur(totalPrix - totalMat)}</strong>`;
   if (all.length === 1) { summary.innerHTML = ligneMo; return; }
   const totalDuree = all.reduce((s, x) => s + x.duree_min, 0);
-  summary.innerHTML = `<strong>${all.length} prestations</strong> · Total : ${totalPrix} € · ${formatDur(totalDuree)} — chaque prestation apparaîtra séparément dans le planning, à la suite.<br>${ligneMo}`;
+  summary.innerHTML = `<strong>${all.length} prestations</strong> · Total : ${totalPrix} € · ${formatDur(totalDuree)} — un seul rendez-vous dans le planning, une couleur par prestation, à la suite.<br>${ligneMo}`;
 }
 
 // Empêche les doublons : tant que l'enregistrement n'est pas fini,
@@ -2020,6 +2024,20 @@ async function saveNewRdvInner() {
   try {
     if (editingRdvId) {
       const dejaPaye = rdvDejaPaye(currentRdv);
+
+      // RDV à plusieurs prestations : on lit l'ordre actuel des prestations
+      // AVANT la modification, pour pouvoir recaler tout le rendez-vous ensuite.
+      let groupeAvant = [];
+      if (currentRdv && currentRdv.groupe_id) {
+        const { data: sib } = await dbCall('reservations', 'select', {
+          filters: [{ col: 'groupe_id', op: 'eq', value: currentRdv.groupe_id }],
+          order: [{ col: 'heure' }]
+        });
+        groupeAvant = (sib || []).filter(g => g.statut !== 'annule')
+          .sort((a, b) => timeToMin(a.heure) - timeToMin(b.heure) || (Number(a.id) || 0) - (Number(b.id) || 0));
+      }
+      if (!groupeAvant.some(g => g.id === editingRdvId)) groupeAvant = [currentRdv];
+
       const payload = {
         prenom, nom, telephone: tel, email,
         prestation_nom: primary.nom,
@@ -2034,37 +2052,55 @@ async function saveNewRdvInner() {
         filters: [{ col: 'id', op: 'eq', value: editingRdvId }]
       });
 
-      // Prestations ajoutées à un RDV existant : une ligne par prestation,
-      // enchaînées après la première et reliées par le même groupe_id.
-      if (nrExtraServices.length) {
-        const groupeId = (currentRdv && currentRdv.groupe_id)
-          || ('g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+      // Un RDV = une chaîne de prestations collées les unes aux autres.
+      // La prestation modifiée sert de repère : celles d'avant se placent juste
+      // avant elle, celles d'après juste après (et les nouvelles à la fin).
+      // Changer l'heure ou la durée d'une prestation décale donc tout le RDV.
+      const chaine = groupeAvant.map(g => ({
+        id: g.id,
+        duree: g.id === editingRdvId ? primary.duree_min : (Number(g.duree_min) || 0)
+      }));
+      nrExtraServices.forEach(s2 => chaine.push({ nouvelle: s2, duree: Number(s2.duree_min) || 0 }));
+      const idx = chaine.findIndex(c => c.id === editingRdvId);
+      const debut = timeToMin(heure);
+      let cur = debut;
+      for (let j = idx - 1; j >= 0; j--) { cur -= chaine[j].duree; chaine[j].debut = Math.max(cur, 0); }
+      cur = debut;
+      for (let j = idx; j < chaine.length; j++) { chaine[j].debut = cur; cur += chaine[j].duree; }
+      const hhmm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 
-        if (!(currentRdv && currentRdv.groupe_id)) {
-          await dbCall('reservations', 'update', {
-            payload: { groupe_id: groupeId },
-            filters: [{ col: 'id', op: 'eq', value: editingRdvId }]
-          });
-        }
+      let groupeId = currentRdv && currentRdv.groupe_id;
+      if (!groupeId && nrExtraServices.length) {
+        groupeId = 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        await dbCall('reservations', 'update', {
+          payload: { groupe_id: groupeId },
+          filters: [{ col: 'id', op: 'eq', value: editingRdvId }]
+        });
+      }
 
-        let cursorMin = timeToMin(heure) + primary.duree_min;
-        for (const s2 of nrExtraServices) {
-          const hh = String(Math.floor(cursorMin / 60)).padStart(2, '0');
-          const mm = String(cursorMin % 60).padStart(2, '0');
+      for (const c of chaine) {
+        if (c.id === editingRdvId) continue;
+        if (c.nouvelle) {
           await dbCall('reservations', 'insert', {
             payload: {
               prenom, nom, telephone: tel, email,
-              prestation_nom: s2.nom,
-              date, heure: `${hh}:${mm}`, duree_min: s2.duree_min, prix: s2.prix,
+              prestation_nom: c.nouvelle.nom,
+              date, heure: hhmm(c.debut), duree_min: c.nouvelle.duree_min, prix: c.nouvelle.prix,
               acompte: 0, acompte_paye: 0, montant_paye: 0,
               message: '', statut: 'confirme', groupe_id: groupeId
             },
             single: true
           });
-          cursorMin += s2.duree_min;
+        } else {
+          // Les autres prestations du RDV suivent : même jour, horaire recalé,
+          // mêmes coordonnées cliente.
+          await dbCall('reservations', 'update', {
+            payload: { date, heure: hhmm(c.debut), prenom, nom, telephone: tel, email },
+            filters: [{ col: 'id', op: 'eq', value: c.id }]
+          });
         }
-        nrExtraServices = [];
       }
+      nrExtraServices = [];
     } else if (services.length === 1) {
       const payload = {
         prenom, nom, telephone: tel, email,
@@ -2231,27 +2267,30 @@ async function loadAgenda() {
   if (agendaData.length === 0) {
     document.getElementById('agenda-list').innerHTML = '<div style="padding:24px;text-align:center;color:var(--taupe);font-size:.85rem;background:var(--white);border:1px solid var(--beige-mid);border-radius:10px;">Aucun rendez-vous ce jour.</div>';
   } else {
-    const groupCounts = {};
-    agendaData.forEach(r => { if (r.groupe_id) groupCounts[r.groupe_id] = (groupCounts[r.groupe_id] || 0) + 1; });
-    const groupSeen = {};
-    document.getElementById('agenda-list').innerHTML = agendaData.map(r => {
-      let groupBadge = '';
-      if (r.groupe_id) {
-        groupSeen[r.groupe_id] = (groupSeen[r.groupe_id] || 0) + 1;
-        groupBadge = `<span style="font-size:.7rem;color:var(--taupe-dark);background:var(--beige);border-radius:6px;padding:2px 6px;margin-left:6px;">${groupSeen[r.groupe_id]}/${groupCounts[r.groupe_id]}</span>`;
-      }
+    // Un RDV à plusieurs prestations = une seule carte, une ligne par prestation
+    document.getElementById('agenda-list').innerHTML = grouperRdvAgenda(agendaData).map(rows => {
+      const r0 = rows[0];
+      const fin = Math.max(...rows.map(r => timeToMin(r.heure) + (r.duree_min || 30)));
+      const finStr = `${String(Math.floor(fin/60)).padStart(2,'0')}:${String(fin%60).padStart(2,'0')}`;
+      const total = rows.reduce((s2, r) => s2 + (Number(r.prix) || 0), 0);
+      const regle = rows.reduce((s2, r) => s2 + encaisseEnLigne(r), 0);
+      const lignes = rows.map(r => `
+          <div style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--taupe-dark);padding:2px 0;cursor:pointer;" onclick="event.stopPropagation();openModal(rowAt(${regRow(r)}))">
+            <span style="width:10px;height:10px;border-radius:3px;background:${getPrestationColor(r.prestation_nom)};flex-shrink:0;"></span>
+            <span>${r.heure} · ${r.prestation_nom} · ${formatDur(r.duree_min)} · ${r.prix} €</span>
+          </div>`).join('');
       return `
-      <div style="background:var(--white);border:1px solid var(--beige-mid);border-left:4px solid ${getPrestationColor(r.prestation_nom)};border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;gap:16px;cursor:pointer;" onclick="openModal(rowAt(${regRow(r)}))">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;min-width:64px;">${r.heure}</div>
+      <div style="background:var(--white);border:1px solid var(--beige-mid);border-left:4px solid ${getPrestationColor(r0.prestation_nom)};border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;gap:16px;cursor:pointer;" onclick="openModal(rowAt(${regRow(r0)}))">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;min-width:64px;">${r0.heure}${rows.length > 1 ? `<div style="font-family:'Poppins',sans-serif;font-size:.7rem;color:var(--taupe-dark);">→ ${finStr}</div>` : ''}</div>
         <div style="flex:1;">
-          <div style="font-weight:500;font-size:.9rem;">${r.prenom} ${r.nom}${groupBadge}</div>
-          <div style="font-size:.78rem;color:var(--taupe-dark);">${r.prestation_nom} · ${formatDur(r.duree_min)}</div>
+          <div style="font-weight:500;font-size:.9rem;">${r0.prenom} ${r0.nom}${rows.length > 1 ? `<span style="font-size:.7rem;color:var(--taupe-dark);background:var(--beige);border-radius:6px;padding:2px 6px;margin-left:6px;">${rows.length} prestations</span>` : ''}</div>
+          ${rows.length > 1 ? lignes : `<div style="font-size:.78rem;color:var(--taupe-dark);">${r0.prestation_nom} · ${formatDur(r0.duree_min)}</div>`}
         </div>
         <div style="text-align:right;">
-          <div style="font-weight:600;font-size:.9rem;">${r.prix} €</div>
-          <div style="font-size:.75rem;color:var(--taupe-dark);">Réglé : ${encaisseEnLigne(r)} € · Reste : ${resteDu(r)} €</div>
+          <div style="font-weight:600;font-size:.9rem;">${total} €</div>
+          <div style="font-size:.75rem;color:var(--taupe-dark);">Réglé : ${regle} € · Reste : ${Math.max(total - regle, 0)} €</div>
         </div>
-        ${badgeRdv(r)}
+        ${badgeRdv(r0)}
       </div>`;
     }).join('');
   }
@@ -2306,6 +2345,19 @@ function getPrestationColor(nom) {
 
   return '#E8E2D8'; // couleur par défaut si aucune correspondance
 }
+// Regroupe les lignes du jour par rendez-vous (groupe_id), prestations triées
+// par heure ; les RDV sont triés par heure de début.
+function grouperRdvAgenda(data) {
+  const map = {}, ordre = [];
+  (data || []).forEach(r => {
+    const k = r.groupe_id || ('id' + r.id);
+    if (!map[k]) { map[k] = []; ordre.push(k); }
+    map[k].push(r);
+  });
+  return ordre.map(k => map[k].sort((a, b) => timeToMin(a.heure) - timeToMin(b.heure)))
+    .sort((a, b) => timeToMin(a[0].heure) - timeToMin(b[0].heure));
+}
+
 let agendaBlocages = [];
 let agendaFerme = false;
 let agendaOpenStart = '09:00';
@@ -2344,27 +2396,34 @@ function renderPlanning(data) {
     linesHtml += `<div class="planning-hour-line" style="top:${top}px;"></div>`;
   }
 
-  const groupCounts = {};
-  data.forEach(r => { if (r.groupe_id) groupCounts[r.groupe_id] = (groupCounts[r.groupe_id] || 0) + 1; });
-  const groupSeen = {};
-  const blocksHtml = data.map((r, i) => {
-    const start = timeToMin(r.heure);
-    const dur = r.duree_min || 30;
-    const top = (start - minStart) * PX_PER_MIN;
-    const height = Math.max(dur * PX_PER_MIN, 28);
-    const color = getPrestationColor(r.prestation_nom);
-    const endMin = start + dur;
-    const endStr = `${String(Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}`;
-    let groupBadge = '';
-    if (r.groupe_id) {
-      groupSeen[r.groupe_id] = (groupSeen[r.groupe_id] || 0) + 1;
-      groupBadge = ` <span style="opacity:.75;">(${groupSeen[r.groupe_id]}/${groupCounts[r.groupe_id]})</span>`;
-    }
-    return `<div class="planning-block" style="top:${top}px;height:${height}px;background:${color};border-left-color:var(--taupe-dark);" onclick="openModal(rowAt(${regRow(r)}))">
-      <div class="planning-block-name">${r.prenom} ${r.nom}${groupBadge}</div>
-      <div class="planning-block-meta">${r.prestation_nom}</div>
-      <div class="planning-block-meta">${r.heure} - ${endStr} · ${r.prix} €</div>
+  // Un RDV à plusieurs prestations (même groupe_id) = UN seul bloc, découpé
+  // en bandes de couleur (une par prestation, hauteur = sa durée).
+  const fmtHM = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+  const blocksHtml = grouperRdvAgenda(data).map(rows => {
+    const gStart = timeToMin(rows[0].heure);
+    const gEnd = Math.max(...rows.map(r => timeToMin(r.heure) + (r.duree_min || 30)));
+    const top = (gStart - minStart) * PX_PER_MIN;
+    const height = Math.max((gEnd - gStart) * PX_PER_MIN, 28);
+    const total = rows.reduce((s2, r) => s2 + (Number(r.prix) || 0), 0);
+    const first = rows[0];
+    if (rows.length === 1) {
+      return `<div class="planning-block" style="top:${top}px;height:${height}px;background:${getPrestationColor(first.prestation_nom)};border-left-color:var(--taupe-dark);" onclick="openModal(rowAt(${regRow(first)}))">
+      <div class="planning-block-name">${first.prenom} ${first.nom}</div>
+      <div class="planning-block-meta">${first.prestation_nom}</div>
+      <div class="planning-block-meta">${first.heure} - ${fmtHM(gEnd)} · ${first.prix} €</div>
     </div>`;
+    }
+    const segs = rows.map((r, k) => {
+      const st = timeToMin(r.heure), du = r.duree_min || 30;
+      const sTop = (st - gStart) * PX_PER_MIN;
+      const sH = Math.max(du * PX_PER_MIN, 14);
+      const titre = k === 0
+        ? `<div class="planning-block-name">${first.prenom} ${first.nom} <span style="opacity:.75;font-weight:400;">· ${rows.length} prestations · ${fmtHM(gStart)} - ${fmtHM(gEnd)} · ${total} €</span></div>` : '';
+      return `<div class="planning-seg" style="top:${sTop}px;height:${sH}px;background:${getPrestationColor(r.prestation_nom)};" onclick="openModal(rowAt(${regRow(r)}))" title="${String(r.prestation_nom).replace(/"/g,'&quot;')} — ${r.heure} - ${fmtHM(st + du)}">
+        ${titre}<div class="planning-block-meta">${r.prestation_nom} · ${r.heure} - ${fmtHM(st + du)} · ${r.prix} €</div>
+      </div>`;
+    }).join('');
+    return `<div class="planning-block planning-groupe" style="top:${top}px;height:${height}px;border-left-color:var(--taupe-dark);">${segs}</div>`;
   }).join('');
 
   const blocagesHtml = agendaBlocages.map(b => {
@@ -2513,6 +2572,7 @@ async function afficherGroupeDansEdition(r) {
   const total = rows.reduce((s, g) => s + (Number(g.prix) || 0), 0);
   box.innerHTML = `
     <p style="font-weight:600;margin:0 0 6px;">Ce rendez-vous comprend ${rows.length} prestations (total ${total} €) :</p>
+    <p style="margin:0 0 6px;color:var(--taupe-dark);">Si vous changez le jour, l'heure ou la durée, toutes les prestations du rendez-vous se recalent automatiquement à la suite.</p>
     <ul style="margin:0;padding-left:18px;line-height:1.9;">
       ${rows.map(g => g.id === r.id
         ? `<li style="font-weight:700;">${g.heure} — ${g.prestation_nom} — ${g.prix} € <span style="font-weight:400;">(en cours de modification)</span></li>`
