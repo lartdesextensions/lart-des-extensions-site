@@ -3045,13 +3045,33 @@ async function loadAttente() {
       <td><span style="color:${st[1]};font-weight:500;">${st[0]}</span>${trouves}</td>
       <td style="white-space:nowrap;">
         ${tel ? `<a class="action-btn" href="tel:${escA(tel)}">📞</a> ${lienWhatsApp(r.telephone) ? `<a class="action-btn" href="${escA(lienWhatsApp(r.telephone))}" target="_blank" rel="noopener" title="WhatsApp">🟢</a> ` : ''}<button type="button" class="action-btn" data-tel="${escA(tel)}" onclick="copierPourOnoff(this)" title="Copier le numéro pour Onoff">📋</button>` : ''}
-        <a class="action-btn" href="mailto:${escA(r.email)}">✉️</a>
+        ${r.email ? `<button type="button" class="action-btn" onclick="envoyerDispoAttente(${Number(r.id)}, this)" title="Envoyer par email les prochaines dates disponibles">📩</button>` : ''}
         ${r.statut === 'en_attente' ? '' : `<button class="action-btn" onclick="setAttenteStatut(${Number(r.id)}, 'en_attente')" title="La remettre en attente : elle sera re-prévenue si une autre place se libère">↺</button>`}
         ${r.statut !== 'traitee' ? `<button class="action-btn" onclick="setAttenteStatut(${Number(r.id)}, 'traitee')" title="Marquer comme traitée">✔︎</button>` : ''}
         <button class="action-btn" onclick="deleteAttente(${Number(r.id)})" title="Retirer de la liste">🗑</button>
       </td>
     </tr>`;
   }).join('');
+}
+// Envoie tout de suite à la cliente, depuis le site, un email avec les
+// prochaines dates libres pour sa prestation (ses dates choisies, sinon les 3 mois).
+async function envoyerDispoAttente(id, btn) {
+  if (!confirm("Envoyer à cette cliente un email avec les prochaines dates disponibles pour sa prestation ?")) return;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res = await fetch('/.netlify/functions/liste-attente-envoyer', {
+      method: 'POST', headers: adminHeaders(), body: JSON.stringify({ id })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    const liste = (data.jours || []).map(j => new Date(j.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long' })).join(', ');
+    alert('✓ Email envoyé avec ces dates : ' + liste);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📩'; }
+    loadAttente();
+  }
 }
 async function setAttenteStatut(id, statut) {
   const payload = { statut };
