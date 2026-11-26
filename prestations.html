@@ -135,6 +135,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
 .supplement-row.selected{background:var(--taupe);border-color:var(--taupe);}
 .supplement-row input[type=checkbox]{
   width:16px;height:16px;accent-color:var(--brown);cursor:pointer;
+  pointer-events:none; /* le clic passe à la ligne, qui ajoute le supplément au panier */
 }
 .supplement-row label{
   font-size:13px;cursor:pointer;flex:1;
@@ -347,7 +348,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
 
     <div class="sub-panel active" id="sub-bandes-nouvelle">
       <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Prix comprenant la pose, la coupe et les extensions (cheveux russes premium 55/70 cm). Extensions 100% naturelles — choisissez entre les classiques et les injectées selon le résultat souhaité.</p>
-      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Nouvelle pose bandes',35,40)">
+      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Nouvelle pose bandes',35,50)">
         <input type="checkbox" onclick="event.stopPropagation()">
         <label>+ Supplément personnalisation de couleur sur extensions</label>
         <span class="supplement-price">+35 € <span style="font-size:10px;color:var(--taupe);display:block">50 min</span></span>
@@ -379,7 +380,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
 
     <div class="sub-panel" id="sub-bandes-depose">
       <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Dépose à l'aide d'un produit huileux. Shampoing vivement conseillé en supplément.</p>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément shampoing - Dépose bandes',40,30)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément shampoing - Dépose bandes',40,35)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément shampoing</label>
           <span class="supplement-price">+40 € <span style="font-size:10px;color:var(--taupe);display:block">35 min</span></span>
@@ -431,7 +432,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
           <label>+ Supplément coupe / nettoyage des bandes</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
         </div>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Repose',35,40)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Repose',35,50)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément personnalisation de couleur sur extensions</label>
           <span class="supplement-price">+35 € <span style="font-size:10px;color:var(--taupe);display:block">50 min</span></span>
@@ -460,7 +461,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
       </div>
       <div class="sub-panel active" id="sub2-bandes-entretien-classique">
         <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Venir les cheveux propres et lissés. Supplément +15 € si pose réalisée ailleurs, beaucoup de nœuds ou remontée date de plus de 8 semaines.</p>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" style="color:var(--taupe-dark);background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/remontée +8 sem - Entretien classique',15,10)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" style="color:var(--taupe-dark);background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/remontée +8 sem - Entretien classique',15,15)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément : pose faite ailleurs, nœuds ou remontée datant de plus de 8 semaines</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
@@ -482,7 +483,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
         </div>
       <div class="sub-panel" id="sub2-bandes-entretien-shampoing">
         <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Shampoing réalisé avant la remontée. Supplément +15 € si pose réalisée ailleurs, beaucoup de nœuds ou remontée date de plus de 8 semaines.</p>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" style="color:var(--taupe-dark);background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/remontée +8 sem - Entretien shampoing',15,10)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" style="color:var(--taupe-dark);background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/remontée +8 sem - Entretien shampoing',15,15)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément : pose faite ailleurs, nœuds ou remontée datant de plus de 8 semaines</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
@@ -515,7 +516,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
     </div>
     <div class="sub-panel active" id="sub-keratine-nouvelle">
       <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Prix comprenant la pose, la coupe et les extensions (cheveux russes premium 55/70 cm). Extensions 100% naturelles.</p>
-      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Kératine nouvelle pose',35,40)">
+      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Kératine nouvelle pose',35,50)">
         <input type="checkbox" onclick="event.stopPropagation()">
         <label>+ Supplément personnalisation de couleur sur extensions</label>
         <span class="supplement-price">+35 € <span style="font-size:10px;color:var(--taupe);display:block">50 min</span></span>
@@ -541,7 +542,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
       </div>
       <div class="sub-panel active" id="sub2-keratine-depose-salon">
         <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Extensions posées au salon. Supplément +15 € si beaucoup de nœuds.</p>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds - Dépose kératine salon',15,10)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds - Dépose kératine salon',15,15)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément nœuds</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
@@ -558,7 +559,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
       </div>
       <div class="sub-panel" id="sub2-keratine-depose-externe">
         <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Extensions posées ailleurs. Supplément +15 € si beaucoup de nœuds.</p>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds - Dépose kératine externe',15,10)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds - Dépose kératine externe',15,15)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément nœuds</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
@@ -577,12 +578,12 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
     <div class="sub-panel" id="sub-keratine-entretien">
       <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Prix comprenant la pose, la coupe et les extensions (cheveux russes premium 55/70 cm). Extensions 100% naturelles.</p>
       <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Dépose et repose des extensions kératine.</p>
-      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/pose ailleurs - Dépose + Nouvelle pose kératine',15,10)">
+      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/pose ailleurs - Dépose + Nouvelle pose kératine',15,15)">
         <input type="checkbox" onclick="event.stopPropagation()">
         <label>+ Supplément : beaucoup de nœuds ou pose faite ailleurs</label>
         <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
       </div>
-      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Dépose + Nouvelle pose kératine',35,40)">
+      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Dépose + Nouvelle pose kératine',35,50)">
         <input type="checkbox" onclick="event.stopPropagation()">
         <label>+ Supplément personnalisation de couleur sur extensions</label>
         <span class="supplement-price">+35 € <span style="font-size:10px;color:var(--taupe);display:block">50 min</span></span>
@@ -612,7 +613,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
       <button class="sub-btn" onclick="showSub('tissage','depose',this)">Dépose</button>
     </div>
     <div class="sub-panel active" id="sub-tissage-pose">
-      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Tissage nouvelle pose',35,40)">
+      <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément personnalisation de couleur sur extensions - Tissage nouvelle pose',35,50)">
         <input type="checkbox" onclick="event.stopPropagation()">
         <label>+ Supplément personnalisation de couleur sur extensions</label>
         <span class="supplement-price">+35 € <span style="font-size:10px;color:var(--taupe);display:block">50 min</span></span>
@@ -635,7 +636,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
       </div>
       <div class="sub-panel active" id="sub2-tissage-entretien-classique">
         <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Venir les cheveux propres et lissés. Supplément +15 € si pose réalisée ailleurs, beaucoup de nœuds ou remontée date de plus de 8 semaines.</p>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/remontée +8 sem - Tissage entretien classique',15,10)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/remontée +8 sem - Tissage entretien classique',15,15)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément : pose faite ailleurs, nœuds ou remontée datant de plus de 8 semaines</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
@@ -653,7 +654,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
       </div>
       <div class="sub-panel" id="sub2-tissage-entretien-shampoing">
         <p style="font-size:12px;color:var(--taupe-dark);margin-bottom:16px;">Shampoing réalisé entre la dépose et la remontée. Supplément +15 € si pose réalisée ailleurs, beaucoup de nœuds ou remontée date de plus de 8 semaines.</p>
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/remontée +8 sem - Tissage entretien shampoing',15,10)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœuds/remontée +8 sem - Tissage entretien shampoing',15,15)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément : pose faite ailleurs, nœuds ou remontée datant de plus de 8 semaines</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
@@ -676,7 +677,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
         <button class="sub-btn" onclick="showSub2('tissage-depose','externe',this)">Posée ailleurs</button>
       </div>
       <div class="sub-panel active" id="sub2-tissage-depose-salon">
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœud - Dépose tissage salon',15,10)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœud - Dépose tissage salon',15,15)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément nœud</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>
@@ -693,7 +694,7 @@ body{font-family:'Poppins',sans-serif;background:var(--cream);color:var(--dark);
         </table>
       </div>
       <div class="sub-panel" id="sub2-tissage-depose-externe">
-        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœud - Dépose tissage externe',15,10)">
+        <div class="supplement-row" style="background:var(--beige-mid);border-color:var(--taupe);" onclick="toggleSupplement(this,'Supplément nœud - Dépose tissage externe',15,15)">
           <input type="checkbox" onclick="event.stopPropagation()">
           <label>+ Supplément nœud</label>
           <span class="supplement-price">+15 € <span style="font-size:10px;color:var(--taupe);display:block">15 min</span></span>

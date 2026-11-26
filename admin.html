@@ -710,13 +710,20 @@ tr:hover td{background:var(--cream);}
       <div style="border-top:1px dashed var(--beige-mid);padding-top:14px;margin-bottom:14px;">
         <label style="display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:6px;">+ Ajouter un supplément à ce rdv</label>
         <div class="field-row">
-          <div class="field"><label>Nom du supplément</label><input type="text" id="nr-supp-nom" placeholder="Ex : Supplément shampoing"></div>
+          <div class="field"><label>Nom du supplément</label><input type="text" id="nr-supp-nom" list="nr-supp-liste" placeholder="Choisir ou écrire un supplément" oninput="remplirSupplementConnu()"></div>
           <div class="field"><label>Prix (€)</label><input type="number" id="nr-supp-prix" placeholder="15"></div>
         </div>
         <div style="display:flex;align-items:flex-end;gap:8px;">
           <div class="field" style="flex:1;"><label>Durée (min)</label><input type="number" id="nr-supp-duree" placeholder="15"></div>
-          <button class="btn btn-outline" style="width:auto;padding:11px 16px;" onclick="addSupplementToRdv()">Ajouter</button>
+          <button type="button" class="btn btn-outline" style="width:auto;padding:11px 16px;" onclick="addSupplementToRdv()">Ajouter</button>
         </div>
+        <datalist id="nr-supp-liste">
+          <option value="Supplément coupe"></option>
+          <option value="Supplément coupe/nettoyage des bandes"></option>
+          <option value="Supplément personnalisation de couleur sur extensions"></option>
+          <option value="Supplément shampoing"></option>
+          <option value="Supplément nœuds / pose ailleurs / remontée +8 semaines"></option>
+        </datalist>
       </div>
       <div id="nr-total-summary" style="font-size:.8rem;color:var(--taupe-dark);margin-bottom:14px;"></div>
     </div>
@@ -1927,6 +1934,22 @@ function updatePrimaryPickerButtonLabel() {
   }
 }
 
+// Suppléments habituels (mêmes prix et durées que sur le site) : choisis dans
+// la liste, ils remplissent tout seuls le prix et la durée.
+const SUPPLEMENTS_CONNUS = {
+  'supplément coupe': [15, 15],
+  'supplément coupe/nettoyage des bandes': [15, 15],
+  'supplément personnalisation de couleur sur extensions': [35, 50],
+  'supplément shampoing': [40, 35],
+  'supplément nœuds / pose ailleurs / remontée +8 semaines': [15, 15]
+};
+function remplirSupplementConnu() {
+  const v = SUPPLEMENTS_CONNUS[document.getElementById('nr-supp-nom').value.trim().toLowerCase()];
+  if (!v) return;
+  document.getElementById('nr-supp-prix').value = v[0];
+  document.getElementById('nr-supp-duree').value = v[1];
+}
+
 function addSupplementToRdv() {
   const nomSupp = document.getElementById('nr-supp-nom').value.trim();
   const prixSupp = Number(document.getElementById('nr-supp-prix').value) || 0;
@@ -2022,6 +2045,8 @@ async function saveNewRdvInner() {
 
   // Produit choisi dans la liste mais pas encore ajouté : on le prend quand même
   if (document.getElementById('nr-add-produit').value !== '') addProduitToRdv();
+  // Supplément rempli mais pas encore ajouté (bouton « Ajouter » oublié) : pareil
+  if (document.getElementById('nr-supp-nom').value.trim()) addSupplementToRdv();
 
   const primary = primaryServiceFromForm();
   const services = [primary, ...nrExtraServices].filter(s => s.nom);
