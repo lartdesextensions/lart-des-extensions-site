@@ -354,7 +354,7 @@ nav{display:flex;align-items:center;justify-content:space-between;padding:18px 2
               <span class="pm-s">Sur la totalité de la prestation (<span id="pm-scalapay-amt">—</span>)</span>
             </span>
           </button>
-          <div data-scalapay-widget data-type="checkout" data-amount-selector="#opt-total-amt" id="scalapay-checkout-widget" class="pm-group-widget"></div>
+          <div data-scalapay-widget data-type="checkout" data-amount-selector="#pm-scalapay-amt" id="scalapay-checkout-widget" class="pm-group-widget"></div>
           </div>
         </div>
 
@@ -1416,7 +1416,7 @@ async function handlePaymentReturn() {
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       document.getElementById('panel3').classList.add('active');
       document.getElementById('payment-choice').style.display = 'none';
-      showPaymentError("Le paiement Scalapay n'a pas pu être finalisé. Contactez le salon au 06 49 26 80 61.");
+      showPaymentError("Le paiement Scalapay n'a pas pu être finalisé. Contactez le salon au 07 80 96 38 23.");
       return;
     }
     document.getElementById('payment-loading').style.display = 'none';
