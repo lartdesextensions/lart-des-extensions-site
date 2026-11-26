@@ -725,11 +725,11 @@ tr:hover td{background:var(--cream);}
       <label style="display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:6px;">+ Ajouter un produit vendu à ce rdv</label>
       <div style="display:flex;align-items:flex-end;gap:8px;">
         <div class="field" style="flex:1;margin:0;">
-          <select id="nr-add-produit" style="width:100%;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;background:var(--white);">
+          <select id="nr-add-produit" onchange="addProduitToRdv()" style="width:100%;padding:11px 14px;border:1px solid var(--beige-mid);border-radius:8px;font-family:'Poppins',sans-serif;font-size:.88rem;background:var(--white);">
             <option value="">— Choisir un produit —</option>
           </select>
         </div>
-        <div class="field" style="flex:0 0 64px;margin:0;"><label>Qté</label><input type="number" id="nr-produit-qte" value="1" min="1"></div>
+        <div class="field" style="flex:0 0 64px;margin:0;"><label>Qté</label><input type="number" id="nr-produit-qte" value="1" min="1" title="Choisir la quantité avant le produit"></div>
         <button type="button" class="btn btn-outline" style="width:auto;padding:11px 16px;" onclick="addProduitToRdv()">Ajouter</button>
       </div>
     </div>
@@ -1593,7 +1593,15 @@ function renderNrProduitsList() {
     ? '<label style="display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--taupe-dark);margin-bottom:6px;">Produits vendus sur ce rdv</label>'
     : '';
   container.innerHTML = label + existingHtml + pendingHtml;
+  if (typeof updateNrTotalSummary === 'function') updateNrTotalSummary();
 }
+
+// Total des produits vendus sur ce rdv (déjà enregistrés + ajoutés dans le formulaire)
+function totalProduitsForm() {
+  return nrExistingProduitVentes.reduce((t, v) => t + (Number(v.prix) || 0) * (Number(v.quantite) || 1), 0)
+    + nrExtraProduits.reduce((t, p) => t + (Number(p.prix) || 0) * (Number(p.quantite) || 1), 0);
+}
+function fmtProd(n) { return (Math.round(n * 100) / 100).toString().replace('.', ',') + ' €'; }
 
 function buildGroupedOptions(list) {
   const groups = [];
@@ -1966,13 +1974,17 @@ function updateNrTotalSummary() {
   }
   const all = [primary, ...nrExtraServices].filter(s => s.nom);
   const summary = document.getElementById('nr-total-summary');
-  if (all.length === 0) { summary.textContent = ''; return; }
+  const totProd = totalProduitsForm();
+  const ligneProd = totProd > 0
+    ? `<br>Produits vendus : <strong>${fmtProd(totProd)}</strong> · Total à payer (prestations + produits) : <strong>${fmtProd(all.reduce((s, x) => s + (Number(x.prix) || 0), 0) + totProd)}</strong>`
+    : '';
+  if (all.length === 0) { summary.innerHTML = ligneProd.replace(/^<br>/, ''); return; }
   const totalPrix = all.reduce((s, x) => s + (Number(x.prix) || 0), 0);
   const totalMat = all.reduce((s, x) => s + coutMateriel(x.nom), 0);
   const ligneMo = `Matériel : ${fmtEur(totalMat)} · Main-d'œuvre : <strong>${fmtEur(totalPrix - totalMat)}</strong>`;
-  if (all.length === 1) { summary.innerHTML = ligneMo; return; }
+  if (all.length === 1) { summary.innerHTML = ligneMo + ligneProd; return; }
   const totalDuree = all.reduce((s, x) => s + x.duree_min, 0);
-  summary.innerHTML = `<strong>${all.length} prestations</strong> · Total : ${totalPrix} € · ${formatDur(totalDuree)} — un seul rendez-vous dans le planning, une couleur par prestation, à la suite.<br>${ligneMo}`;
+  summary.innerHTML = `<strong>${all.length} prestations</strong> · Total : ${totalPrix} € · ${formatDur(totalDuree)} — un seul rendez-vous dans le planning, une couleur par prestation, à la suite.<br>${ligneMo}${ligneProd}`;
 }
 
 // Empêche les doublons : tant que l'enregistrement n'est pas fini,
@@ -2007,6 +2019,9 @@ async function saveNewRdvInner() {
   const prixNet = Math.max(prixBrut - remiseMontant, 0);
   const acomptePaye = document.getElementById('nr-acompte-paye').checked ? 1 : 0;
   const msg = document.getElementById('nr-msg');
+
+  // Produit choisi dans la liste mais pas encore ajouté : on le prend quand même
+  if (document.getElementById('nr-add-produit').value !== '') addProduitToRdv();
 
   const primary = primaryServiceFromForm();
   const services = [primary, ...nrExtraServices].filter(s => s.nom);
@@ -2189,6 +2204,7 @@ async function saveNewRdvInner() {
       nrExtraProduits = [];
     } catch (err) {
       console.error('Erreur enregistrement produits vendus:', err);
+      alert("Le RDV est enregistré, mais le produit vendu n'a pas pu être ajouté : " + err.message);
     }
   }
 
@@ -2294,6 +2310,8 @@ async function loadAgenda() {
   const totalPrix = agendaActifs.reduce((s, r) => s + (Number(r.prix) || 0), 0);
   // Acompte gardé d'une cliente pas venue : reste compté comme encaissé
   const totalAcompte = agendaData.reduce((s, r) => s + ((!r._pasVenue || Number(r.acompte_rembourse) === ACOMPTE_GARDE) ? encaisseEnLigne(r) : 0), 0);
+  agendaProduitsParRdv = {};
+  (ventesJour || []).forEach(v => { if (v.reservation_id != null) agendaProduitsParRdv[v.reservation_id] = (agendaProduitsParRdv[v.reservation_id] || 0) + (Number(v.prix) || 0) * (Number(v.quantite) || 1); });
   const totalProduits = (ventesJour || []).reduce((s, v) => s + (Number(v.prix) || 0) * (Number(v.quantite) || 1), 0);
 
   if (agendaFerme) {
@@ -2314,7 +2332,8 @@ async function loadAgenda() {
       const r0 = rows[0];
       const fin = Math.max(...rows.map(r => timeToMin(r.heure) + (r.duree_min || 30)));
       const finStr = `${String(Math.floor(fin/60)).padStart(2,'0')}:${String(fin%60).padStart(2,'0')}`;
-      const total = rows.reduce((s2, r) => s2 + (Number(r.prix) || 0), 0);
+      const prod = produitsDuGroupe(rows);
+      const total = rows.reduce((s2, r) => s2 + (Number(r.prix) || 0), 0) + prod;
       const regle = rows.reduce((s2, r) => s2 + encaisseEnLigne(r), 0);
       const lignes = rows.map(r => `
           <div style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--taupe-dark);padding:2px 0;cursor:pointer;" onclick="event.stopPropagation();openModal(rowAt(${regRow(r)}))">
@@ -2330,8 +2349,9 @@ async function loadAgenda() {
           ${rows.length > 1 ? lignes : `<div style="font-size:.78rem;color:var(--taupe-dark);">${r0.prestation_nom} · ${formatDur(r0.duree_min)}</div>`}
         </div>
         <div style="text-align:right;">
-          <div style="font-weight:600;font-size:.9rem;">${total} €</div>
-          <div style="font-size:.75rem;color:var(--taupe-dark);">Réglé : ${regle} € · Reste : ${Math.max(total - regle, 0)} €</div>
+          <div style="font-weight:600;font-size:.9rem;">${fmtProd(total)}</div>
+          ${prod ? `<div style="font-size:.72rem;color:var(--taupe-dark);">dont 🛍️ produits ${fmtProd(prod)}</div>` : ''}
+          <div style="font-size:.75rem;color:var(--taupe-dark);">Réglé : ${regle} € · Reste : ${fmtProd(Math.max(total - regle, 0))}</div>
         </div>
         ${badgeRdv(r0)}
       </div>`;
@@ -2423,6 +2443,8 @@ function memeCliente(a, b) {
 }
 function finGroupe(rows) { return Math.max(...rows.map(r => timeToMin(r.heure) + (Number(r.duree_min) || 0))); }
 
+let agendaProduitsParRdv = {};
+function produitsDuGroupe(rows) { return rows.reduce((t, r) => t + (agendaProduitsParRdv[r.id] || 0), 0); }
 let agendaBlocages = [];
 let agendaFerme = false;
 let agendaOpenStart = '09:00';
@@ -2474,13 +2496,15 @@ function renderPlanning(data) {
     const gEnd = Math.max(...rows.map(r => timeToMin(r.heure) + (r.duree_min || 30)));
     const top = (gStart - minStart) * PX_PER_MIN;
     const height = Math.max((gEnd - gStart) * PX_PER_MIN, 28);
-    const total = rows.reduce((s2, r) => s2 + (Number(r.prix) || 0), 0);
+    const prod = produitsDuGroupe(rows);
+    const total = rows.reduce((s2, r) => s2 + (Number(r.prix) || 0), 0) + prod;
+    const prodTxt = prod ? ` · 🛍️ ${fmtProd(prod)}` : '';
     const first = rows[0];
     if (rows.length === 1) {
       return `<div class="planning-block${pvCls}" style="top:${top}px;height:${height}px;background:${couleur(first)};border-left-color:var(--taupe-dark);" onclick="openModal(rowAt(${regRow(first)}))">
       <div class="planning-block-name">${first.prenom} ${first.nom}${pvTag}</div>
       <div class="planning-block-meta">${first.prestation_nom}</div>
-      <div class="planning-block-meta">${first.heure} - ${fmtHM(gEnd)} · ${first.prix} €</div>
+      <div class="planning-block-meta">${first.heure} - ${fmtHM(gEnd)} · ${prod ? fmtProd(total) + prodTxt : first.prix + ' €'}</div>
     </div>`;
     }
     const segs = rows.map((r, k) => {
@@ -2488,7 +2512,7 @@ function renderPlanning(data) {
       const sTop = (st - gStart) * PX_PER_MIN;
       const sH = Math.max(du * PX_PER_MIN, 14);
       const titre = k === 0
-        ? `<div class="planning-block-name">${first.prenom} ${first.nom}${pvTag} <span style="opacity:.75;font-weight:400;">· ${rows.length} prestations · ${fmtHM(gStart)} - ${fmtHM(gEnd)} · ${total} €</span></div>` : '';
+        ? `<div class="planning-block-name">${first.prenom} ${first.nom}${pvTag} <span style="opacity:.75;font-weight:400;">· ${rows.length} prestations · ${fmtHM(gStart)} - ${fmtHM(gEnd)} · ${fmtProd(total)}${prodTxt}</span></div>` : '';
       return `<div class="planning-seg" style="top:${sTop}px;height:${sH}px;background:${couleur(r)};" onclick="openModal(rowAt(${regRow(r)}))" title="${String(r.prestation_nom).replace(/"/g,'&quot;')} — ${r.heure} - ${fmtHM(st + du)}">
         ${titre}<div class="planning-block-meta">${r.prestation_nom} · ${r.heure} - ${fmtHM(st + du)} · ${r.prix} €</div>
       </div>`;
@@ -2580,6 +2604,27 @@ async function openModal(r) {
   // Si ce rendez-vous fait partie d'une visite à plusieurs prestations (groupe_id),
   // on affiche d'abord un résumé du groupe entier (liste + total) avant le détail
   // de la prestation cliquée, pour éviter d'avoir à additionner à la main.
+  // Produits vendus sur ce RDV (toutes ses prestations)
+  let produitsRdv = [];
+  try {
+    const { data: vj } = await dbCall('ventes_produits', 'select', { filters: [{ col: 'date', op: 'eq', value: r.date }] });
+    let ids = [r.id];
+    if (r.groupe_id) {
+      const { data: sb } = await dbCall('reservations', 'select', { filters: [{ col: 'groupe_id', op: 'eq', value: r.groupe_id }] });
+      ids = (sb || []).map(g => g.id).concat(r.id);
+    }
+    produitsRdv = (vj || []).filter(v => ids.includes(v.reservation_id));
+  } catch (e) {}
+  const totProdRdv = produitsRdv.reduce((t, v) => t + (Number(v.prix) || 0) * (Number(v.quantite) || 1), 0);
+  const produitsHtml = produitsRdv.length ? `
+    <div style="background:#f3f7f1;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+      <p style="font-size:.78rem;font-weight:600;margin:0 0 6px;">🛍️ Produits vendus :</p>
+      <ul style="margin:0;padding-left:18px;font-size:.78rem;line-height:1.7;">
+        ${produitsRdv.map(v => `<li>${v.produit_nom}${Number(v.quantite) > 1 ? ' ×' + v.quantite : ''} — ${fmtProd((Number(v.prix) || 0) * (Number(v.quantite) || 1))}</li>`).join('')}
+      </ul>
+      <p style="font-size:.8rem;font-weight:600;margin:4px 0 0;">Total produits : ${fmtProd(totProdRdv)}</p>
+    </div>` : '';
+
   let groupHtml = '';
   if (r.groupe_id) {
     const { data: siblings } = await dbCall('reservations', 'select', {
@@ -2596,7 +2641,7 @@ async function openModal(r) {
           <ul style="margin:0 0 8px;padding-left:18px;font-size:.78rem;line-height:1.7;">
             ${groupRows.map(g => `<li${g.id === r.id ? ' style="font-weight:700;"' : ''}>${g.prestation_nom} — ${g.prix} €${g.id === r.id ? ' (sélectionnée)' : ` — <a href="#" onclick="openModal(rowAt(${regRow(g)}));return false;" style="color:#b08968;">voir</a>`}</li>`).join('')}
           </ul>
-          <p style="font-size:.85rem;font-weight:700;margin:0;border-top:1px solid #ddd;padding-top:6px;">Total du rendez-vous : ${totalGroupe} € — déjà réglé ${totalEncaisseGroupe} € — reste ${Math.max(totalGroupe - totalEncaisseGroupe, 0)} €</p>
+          <p style="font-size:.85rem;font-weight:700;margin:0;border-top:1px solid #ddd;padding-top:6px;">Total du rendez-vous : ${fmtProd(totalGroupe + totProdRdv)}${totProdRdv ? ` (dont ${fmtProd(totProdRdv)} de produits)` : ''} — déjà réglé ${totalEncaisseGroupe} € — reste ${fmtProd(Math.max(totalGroupe + totProdRdv - totalEncaisseGroupe, 0))}</p>
           <p style="font-size:.8rem;margin:4px 0 0;">Matériel : ${fmtEur(groupRows.reduce((s, g) => s + coutMateriel(g.prestation_nom), 0))} — Main-d'œuvre : <strong>${fmtEur(groupRows.reduce((s, g) => s + mainOeuvre(g), 0))}</strong></p>
           <button type="button" class="btn btn-outline" style="margin-top:8px;font-size:.75rem;padding:6px 10px;border-color:var(--error);color:var(--error);" onclick="retirerPrestationDuRdv()">➖ Retirer « ${r.prestation_nom} » de ce rendez-vous</button>
           <p style="font-size:.7rem;color:var(--taupe-dark);margin:4px 0 0;">Pour changer une prestation : cliquez sur « voir » puis « ✏️ Modifier ».</p>
@@ -2604,7 +2649,9 @@ async function openModal(r) {
     }
   }
 
-  document.getElementById('modal-body').innerHTML = groupHtml + `
+  const totalSeulHtml = (!groupHtml && totProdRdv) ? `
+    <p style="font-size:.85rem;font-weight:700;margin:0 0 12px;">Total du rendez-vous : ${fmtProd((Number(r.prix) || 0) + totProdRdv)} (dont ${fmtProd(totProdRdv)} de produits) — reste ${fmtProd(Math.max((Number(r.prix) || 0) + totProdRdv - encaisseEnLigne(r), 0))}</p>` : '';
+  document.getElementById('modal-body').innerHTML = groupHtml + produitsHtml + totalSeulHtml + `
     <p style="font-size:.82rem;line-height:1.8;color:var(--dark);">
       <strong>Prestation :</strong> ${r.prestation_nom}<br>
       <strong>Date :</strong> ${fmtDateFR(r.date)} à ${r.heure}<br>
